@@ -1870,6 +1870,38 @@ const App: React.FC = () => {
                     />
                 )}
             </div>
+
+            {history.length > 1 && (
+                <div className="w-full max-w-4xl flex items-center justify-center gap-3 animate-fade-in">
+                    <button 
+                        onClick={handleUndo}
+                        disabled={!canUndo}
+                        className="flex items-center justify-center text-center bg-white/10 border border-white/20 text-gray-200 font-semibold py-3 px-5 rounded-md transition-all duration-200 ease-in-out hover:bg-white/20 hover:border-white/30 active:scale-95 text-base disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-white/5"
+                        aria-label="Undo last action"
+                    >
+                        <UndoIcon className="w-5 h-5 mr-2" />
+                        Undo
+                    </button>
+                    <button 
+                        onClick={handleRedo}
+                        disabled={!canRedo}
+                        className="flex items-center justify-center text-center bg-white/10 border border-white/20 text-gray-200 font-semibold py-3 px-5 rounded-md transition-all duration-200 ease-in-out hover:bg-white/20 hover:border-white/30 active:scale-95 text-base disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-white/5"
+                        aria-label="Redo last action"
+                    >
+                        <RedoIcon className="w-5 h-5 mr-2" />
+                        Redo
+                    </button>
+                    <button 
+                        onClick={() => setIsHistoryPanelOpen(true)}
+                        disabled={history.length <= 1}
+                        className="flex items-center justify-center text-center bg-white/10 border border-white/20 text-gray-200 font-semibold py-3 px-5 rounded-md transition-all duration-200 ease-in-out hover:bg-white/20 hover:border-white/30 active:scale-95 text-base disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-white/5"
+                        aria-label="Show edit history"
+                    >
+                        <HistoryIcon className="w-5 h-5 mr-2" />
+                        History
+                    </button>
+                </div>
+            )}
             
             {showSuggestions && suggestions.length > 0 && (
                 <SuggestionPanel
@@ -2009,36 +2041,6 @@ const App: React.FC = () => {
             </div>
             
             <div className="w-full max-w-4xl flex flex-wrap items-center justify-center gap-2 sm:gap-3 mt-4 lg:mt-6">
-                <button 
-                    onClick={handleUndo}
-                    disabled={!canUndo}
-                    className="flex items-center justify-center text-center bg-white/10 border border-white/20 text-gray-200 font-semibold py-3 px-5 rounded-md transition-all duration-200 ease-in-out hover:bg-white/20 hover:border-white/30 active:scale-95 text-base disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-white/5"
-                    aria-label="Undo last action"
-                >
-                    <UndoIcon className="w-5 h-5 mr-2" />
-                    Undo
-                </button>
-                <button 
-                    onClick={handleRedo}
-                    disabled={!canRedo}
-                    className="flex items-center justify-center text-center bg-white/10 border border-white/20 text-gray-200 font-semibold py-3 px-5 rounded-md transition-all duration-200 ease-in-out hover:bg-white/20 hover:border-white/30 active:scale-95 text-base disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-white/5"
-                    aria-label="Redo last action"
-                >
-                    <RedoIcon className="w-5 h-5 mr-2" />
-                    Redo
-                </button>
-                <button 
-                    onClick={() => setIsHistoryPanelOpen(true)}
-                    disabled={!canUndo}
-                    className="flex items-center justify-center text-center bg-white/10 border border-white/20 text-gray-200 font-semibold py-3 px-5 rounded-md transition-all duration-200 ease-in-out hover:bg-white/20 hover:border-white/30 active:scale-95 text-base disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-white/5"
-                    aria-label="Show edit history"
-                >
-                    <HistoryIcon className="w-5 h-5 mr-2" />
-                    History
-                </button>
-                
-                <div className="h-6 w-px bg-gray-600 mx-1 hidden sm:block"></div>
-
                 {canUndo && (
                 <button 
                     onMouseDown={() => setIsComparing(true)}
