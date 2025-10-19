@@ -261,7 +261,7 @@ const App: React.FC = () => {
   const [imageAspectRatio, setImageAspectRatio] = useState<number | null>(null);
 
   const [isLoadingSession, setIsLoadingSession] = useState<boolean>(true);
-  const [sessionToRestore, setSessionToRestore] = useState<{ historyLength: number, historyIndex: number } | null>(null);
+  const [sessionToRestore, setSessionToRestore] = useState<{ historyLength: number; historyIndex: number; activeTab?: Tab; prompt?: string; } | null>(null);
   const [isDownloadModalOpen, setIsDownloadModalOpen] = useState<boolean>(false);
   const [isBatchEditModalOpen, setIsBatchEditModalOpen] = useState<boolean>(false);
   const [isBgRemovalMode, setIsBgRemovalMode] = useState<boolean>(false);
@@ -304,7 +304,12 @@ const App: React.FC = () => {
         if (savedSession) {
             const parsed = JSON.parse(savedSession);
             if (typeof parsed.historyLength === 'number' && typeof parsed.historyIndex === 'number' && parsed.historyLength > 0) {
-                setSessionToRestore({ historyLength: parsed.historyLength, historyIndex: parsed.historyIndex });
+                setSessionToRestore({ 
+                    historyLength: parsed.historyLength, 
+                    historyIndex: parsed.historyIndex,
+                    activeTab: parsed.activeTab,
+                    prompt: parsed.prompt,
+                });
             }
         }
     } catch (e) {
@@ -326,6 +331,8 @@ const App: React.FC = () => {
                 const sessionData = {
                     historyLength: history.length,
                     historyIndex,
+                    activeTab,
+                    prompt: activeTab === 'retouch' ? prompt : '',
                 };
                 localStorage.setItem('utilpic-session', JSON.stringify(sessionData));
             } catch (e) {
@@ -337,7 +344,7 @@ const App: React.FC = () => {
     };
 
     saveSession();
-  }, [history.length, historyIndex, sessionToRestore, isLoadingSession]);
+  }, [history.length, historyIndex, activeTab, prompt, sessionToRestore, isLoadingSession]);
 
   // Reset states based on active tab
   useEffect(() => {
@@ -421,6 +428,7 @@ const App: React.FC = () => {
         await saveImageToHistoryDB(0, dataUrl);
         setHistory([dataUrl]);
         setHistoryIndex(0);
+        setPrompt('');
         setEditHotspot(null);
         setDisplayHotspot(null);
         setActiveTab('retouch');
@@ -1230,6 +1238,7 @@ const App: React.FC = () => {
     if (canUndo) {
       setHistoryIndex(historyIndex - 1);
       setShowSuggestions(false);
+      setPrompt('');
       setEditHotspot(null);
       setDisplayHotspot(null);
       setIsBgRemovalMode(false);
@@ -1245,6 +1254,7 @@ const App: React.FC = () => {
     if (canRedo) {
       setHistoryIndex(historyIndex + 1);
       setShowSuggestions(false);
+      setPrompt('');
       setEditHotspot(null);
       setDisplayHotspot(null);
       setIsBgRemovalMode(false);
@@ -1261,6 +1271,7 @@ const App: React.FC = () => {
       setHistoryIndex(0);
       setShowSuggestions(false);
       setError(null);
+      setPrompt('');
       setEditHotspot(null);
       setDisplayHotspot(null);
       setIsBgRemovalMode(false);
@@ -1276,6 +1287,7 @@ const App: React.FC = () => {
         if (index >= 0 && index < history.length) {
             setHistoryIndex(index);
             setShowSuggestions(false);
+            setPrompt('');
             setEditHotspot(null);
             setDisplayHotspot(null);
             setIsBgRemovalMode(false);
@@ -1445,6 +1457,12 @@ const App: React.FC = () => {
             }
             setHistory(historyImages);
             setHistoryIndex(sessionToRestore.historyIndex);
+            if (sessionToRestore.activeTab) {
+                setActiveTab(sessionToRestore.activeTab);
+            }
+            if (sessionToRestore.prompt) {
+                setPrompt(sessionToRestore.prompt);
+            }
         } catch (e) {
             const errorMessage = getErrorMessage(e);
             console.error("Failed to restore session files from IndexedDB:", e);
