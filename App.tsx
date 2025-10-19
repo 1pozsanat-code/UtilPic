@@ -20,7 +20,7 @@ import WatermarkPanel, { type WatermarkSettings } from './components/WatermarkPa
 import BackgroundPanel, { type BackgroundSettings } from './components/BackgroundPanel.tsx';
 import OverlayPanel, { type OverlayLayer } from './components/OverlayPanel.tsx';
 import ZoomPanel from './components/ZoomPanel.tsx';
-import { UndoIcon, RedoIcon, EyeIcon, HistoryIcon, UserCircleIcon, PhotoIcon, SparklesIcon, SunIcon, EyeDropperIcon, ArrowUpOnSquareIcon, BullseyeIcon, PaletteIcon, MagicWandIcon, CropIcon, LayersIcon, MagnifyingGlassPlusIcon, WatermarkIcon, TuneIcon, MaskIcon, DocumentDuplicateIcon } from './components/icons.tsx';
+import { UndoIcon, RedoIcon, EyeIcon, HistoryIcon, UserCircleIcon, PhotoIcon, SparklesIcon, SunIcon, EyeDropperIcon, ArrowUpOnSquareIcon, BullseyeIcon, PaletteIcon, MagicWandIcon, CropIcon, LayersIcon, MagnifyingGlassPlusIcon, WatermarkIcon, TuneIcon, MaskIcon, DocumentDuplicateIcon, SplitScreenIcon } from './components/icons.tsx';
 import StartScreen from './components/StartScreen.tsx';
 import RestoreSessionModal from './components/RestoreSessionModal.tsx';
 import DownloadModal, { type DownloadSettings } from './components/DownloadModal.tsx';
@@ -304,6 +304,11 @@ const App: React.FC = () => {
   const [activeColorPicker, setActiveColorPicker] = useState<ColorPickerType | null>(null);
   const [maskDataUrl, setMaskDataUrl] = useState<string | null>(null);
 
+  // Split View state
+  const [isSplitView, setIsSplitView] = useState<boolean>(false);
+  const [splitPosition, setSplitPosition] = useState<number>(50); // percentage
+  const isDraggingSplitter = useRef(false);
+
   // State for multi-layer overlays
   const [overlayLayers, setOverlayLayers] = useState<OverlayLayer[]>([]);
   const [activeOverlayId, setActiveOverlayId] = useState<number | null>(null);
@@ -316,7 +321,7 @@ const App: React.FC = () => {
   const [detectedFaces, setDetectedFaces] = useState<Face[]>([]);
   const [selectedFaces, setSelectedFaces] = useState<Face[]>([]);
 
-  const isZoomPanEnabled = activeTab !== 'crop' && activeTab !== 'zoom';
+  const isZoomPanEnabled = activeTab !== 'crop' && activeTab !== 'zoom' && !isSplitView;
 
   // FIX: Moved useMemo to the top level of the component to obey the Rules of Hooks.
   const cursorStyle = useMemo(() => {
@@ -400,6 +405,8 @@ const App: React.FC = () => {
     if (activeTab === 'crop' || activeTab === 'zoom') {
         resetViewTransform();
     }
+    // Exit split view when changing tabs
+    setIsSplitView(false);
   }, [activeTab, resetViewTransform]);
 
   const currentImageUrl = history[historyIndex] ?? null;
@@ -1586,7 +1593,7 @@ const App: React.FC = () => {
     resetViewTransform();
   };
   
-  // --- Zoom & Pan Handlers ---
+  // --- Zoom & Pan & Splitter Handlers ---
   const zoomAtPoint = useCallback((scale: number, pointX: number, pointY: number) => {
     const container = imageContainerRef.current;
     if (!container) return;
@@ -1637,6 +1644,12 @@ const App: React.FC = () => {
     e.stopPropagation(); // Prevent image panning when dragging the hotspot
     setIsDraggingHotspot(true);
   };
+  
+  const handleSplitterPointerDown = (e: React.PointerEvent) => {
+    e.stopPropagation(); // prevent image panning
+    isDraggingSplitter.current = true;
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  };
 
   const handlePointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0 || !isZoomPanEnabled) return;
@@ -1651,6 +1664,16 @@ const App: React.FC = () => {
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
+    if (isDraggingSplitter.current) {
+        const container = imageContainerRef.current;
+        if (container) {
+            const rect = container.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const newPosition = (x / rect.width) * 100;
+            setSplitPosition(Math.max(0, Math.min(100, newPosition)));
+        }
+        return; // Prevent other move logic
+    }
     if (isDraggingHotspot) {
         const coords = getCoordsFromEvent(e);
         if (coords) {
@@ -1670,6 +1693,13 @@ const App: React.FC = () => {
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (isDraggingSplitter.current) {
+        isDraggingSplitter.current = false;
+        if ((e.target as HTMLElement).hasPointerCapture(e.pointerId)) {
+            (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+        }
+        return;
+    }
     if (isDraggingHotspot) {
         setIsDraggingHotspot(false);
         return; // Don't trigger a new click
@@ -1741,7 +1771,7 @@ const App: React.FC = () => {
       <div
         ref={imageContainerRef}
         className="relative w-full h-full"
-        style={{ cursor: cursorStyle }}
+        style={{ cursor: isSplitView ? 'default' : cursorStyle }}
         onWheel={handleWheel}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
@@ -1750,95 +1780,131 @@ const App: React.FC = () => {
             setIsPanning(false);
             setIsDragging(false);
             setIsDraggingHotspot(false);
+            isDraggingSplitter.current = false;
         }}
       >
-        <div
-            className="w-full h-full"
-            style={{ 
-                transform: `translate(${viewTransform.pan.x}px, ${viewTransform.pan.y}px) scale(${viewTransform.scale})`,
-                transition: isPanning || isDraggingHotspot ? 'none' : 'transform 0.1s ease-out',
-            }}
-        >
-            {/* Base image is the original, always at the bottom */}
-            {originalImageUrl && (
+        {isSplitView ? (
+             <>
+                {/* Base Image (Current Edit) */}
                 <img
-                    key={originalImageUrl}
-                    src={originalImageUrl}
-                    alt="Original"
+                    ref={imgRef}
+                    key={`current-split-${currentImageUrl}`}
+                    src={currentImageUrl}
+                    alt="Current"
                     className="absolute inset-0 w-full h-full object-contain pointer-events-none"
+                />
+                {/* Clipped Original Image */}
+                <div 
+                    className="absolute inset-0 w-full h-full"
+                    style={{ clipPath: `inset(0 ${100 - splitPosition}% 0 0)`}}
+                >
+                    <img
+                        key={`original-split-${originalImageUrl}`}
+                        src={originalImageUrl}
+                        alt="Original"
+                        className="absolute inset-0 w-full h-full object-contain pointer-events-none"
+                    />
+                </div>
+                {/* Splitter Handle */}
+                <div
+                    className="absolute top-0 bottom-0 w-1 bg-white/75 cursor-ew-resize group z-10 flex items-center"
+                    style={{ left: `calc(${splitPosition}%)`, transform: 'translateX(-50%)' }}
+                    onPointerDown={handleSplitterPointerDown}
+                >
+                    <div className="absolute top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/90 shadow-lg flex items-center justify-center text-gray-600 group-hover:scale-110 transition-transform">
+                        <svg className="w-4 h-4 rotate-90" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M8 9l4-4 4 4m0 6l-4 4-4-4" /></svg>
+                    </div>
+                </div>
+            </>
+        ) : (
+            <div
+                className="w-full h-full"
+                style={{ 
+                    transform: `translate(${viewTransform.pan.x}px, ${viewTransform.pan.y}px) scale(${viewTransform.scale})`,
+                    transition: isPanning || isDraggingHotspot ? 'none' : 'transform 0.1s ease-out',
+                }}
+            >
+                {/* Base image is the original, always at the bottom */}
+                {originalImageUrl && (
+                    <img
+                        key={originalImageUrl}
+                        src={originalImageUrl}
+                        alt="Original"
+                        className="absolute inset-0 w-full h-full object-contain pointer-events-none"
+                        loading="lazy"
+                    />
+                )}
+                {/* The current image is an overlay that fades in/out for comparison */}
+                <img
+                    ref={imgRef}
+                    key={currentImageUrl}
+                    src={currentImageUrl}
+                    alt="Current"
+                    onLoad={onImageLoad}
+                    className={`absolute inset-0 w-full h-full object-contain transition-opacity duration-200 ease-in-out animate-image-update ${isComparing ? 'opacity-0' : 'opacity-100'}`}
                     loading="lazy"
                 />
-            )}
-            {/* The current image is an overlay that fades in/out for comparison */}
-            <img
-                ref={imgRef}
-                key={currentImageUrl}
-                src={currentImageUrl}
-                alt="Current"
-                onLoad={onImageLoad}
-                className={`absolute inset-0 w-full h-full object-contain transition-opacity duration-200 ease-in-out animate-image-update ${isComparing ? 'opacity-0' : 'opacity-100'}`}
-                loading="lazy"
-            />
-            {/* Mask Overlay */}
-            {maskDataUrl && (
-                <img
-                    src={maskDataUrl}
-                    alt="Active mask"
-                    className="absolute inset-0 w-full h-full object-contain pointer-events-none"
-                />
-            )}
-            {/* Face Detection Bounding Boxes */}
-            {activeTab === 'face' && detectedFaces.length > 0 && (
-                <div className="absolute inset-0 w-full h-full pointer-events-none overflow-hidden">
-                    {detectedFaces.map((face, index) => {
-                        const isSelected = selectedFaces.some(sf => JSON.stringify(sf.box) === JSON.stringify(face.box));
-                        const { x, y, width, height } = face.box;
+                {/* Mask Overlay */}
+                {maskDataUrl && (
+                    <img
+                        src={maskDataUrl}
+                        alt="Active mask"
+                        className="absolute inset-0 w-full h-full object-contain pointer-events-none"
+                    />
+                )}
+                {/* Face Detection Bounding Boxes */}
+                {activeTab === 'face' && detectedFaces.length > 0 && (
+                    <div className="absolute inset-0 w-full h-full pointer-events-none overflow-hidden">
+                        {detectedFaces.map((face, index) => {
+                            const isSelected = selectedFaces.some(sf => JSON.stringify(sf.box) === JSON.stringify(face.box));
+                            const { x, y, width, height } = face.box;
+
+                            return (
+                                <div
+                                    key={index}
+                                    className={`absolute transition-all duration-200 border-2 rounded-md ${isSelected ? 'border-blue-400 bg-blue-400/20 shadow-lg' : 'border-white/50 border-dashed'}`}
+                                    style={{
+                                        left: `${x * 100}%`,
+                                        top: `${y * 100}%`,
+                                        width: `${width * 100}%`,
+                                        height: `${height * 100}%`,
+                                    }}
+                                />
+                            );
+                        })}
+                    </div>
+                )}
+                {/* Overlays Live Preview */}
+                {activeTab === 'overlay' && (
+                    <div className="absolute inset-0 w-full h-full pointer-events-none overflow-hidden">
+                    {overlayLayers.map(layer => {
+                        if (!layer.isVisible) return null;
+                        
+                        const styles: React.CSSProperties = {
+                            position: 'absolute',
+                            opacity: layer.opacity,
+                            width: `${layer.size}%`,
+                            height: 'auto',
+                            top: `${layer.position.y}%`,
+                            left: `${layer.position.x}%`,
+                            mixBlendMode: layer.blendMode,
+                        };
 
                         return (
-                            <div
-                                key={index}
-                                className={`absolute transition-all duration-200 border-2 rounded-md ${isSelected ? 'border-blue-400 bg-blue-400/20 shadow-lg' : 'border-white/50 border-dashed'}`}
-                                style={{
-                                    left: `${x * 100}%`,
-                                    top: `${y * 100}%`,
-                                    width: `${width * 100}%`,
-                                    height: `${height * 100}%`,
-                                }}
+                            <img
+                                key={layer.id}
+                                src={layer.previewUrl}
+                                alt={layer.name}
+                                style={styles}
+                                className="pointer-events-none"
                             />
                         );
                     })}
-                </div>
-            )}
-            {/* Overlays Live Preview */}
-            {activeTab === 'overlay' && (
-                <div className="absolute inset-0 w-full h-full pointer-events-none overflow-hidden">
-                {overlayLayers.map(layer => {
-                    if (!layer.isVisible) return null;
-                    
-                    const styles: React.CSSProperties = {
-                        position: 'absolute',
-                        opacity: layer.opacity,
-                        width: `${layer.size}%`,
-                        height: 'auto',
-                        top: `${layer.position.y}%`,
-                        left: `${layer.position.x}%`,
-                        mixBlendMode: layer.blendMode,
-                    };
-
-                    return (
-                        <img
-                            key={layer.id}
-                            src={layer.previewUrl}
-                            alt={layer.name}
-                            style={styles}
-                            className="pointer-events-none"
-                        />
-                    );
-                })}
-                </div>
-            )}
-        </div>
-        {displayHotspot && !isLoading && activeTab === 'retouch' && !maskDataUrl && (
+                    </div>
+                )}
+            </div>
+        )}
+        {!isSplitView && displayHotspot && !isLoading && activeTab === 'retouch' && !maskDataUrl && (
             <div 
                 className="absolute -translate-x-1/2 -translate-y-1/2 z-10 animate-hotspot-appear"
                 style={{ 
@@ -2107,18 +2173,34 @@ const App: React.FC = () => {
             
             <div className="w-full max-w-4xl flex flex-wrap items-center justify-center gap-2 sm:gap-3 mt-4 lg:mt-6">
                 {canUndo && (
-                <button 
-                    onMouseDown={() => setIsComparing(true)}
-                    onMouseUp={() => setIsComparing(false)}
-                    onMouseLeave={() => setIsComparing(false)}
-                    onTouchStart={() => setIsComparing(true)}
-                    onTouchEnd={() => setIsComparing(false)}
-                    className="flex items-center justify-center text-center bg-white/10 border border-white/20 text-gray-200 font-semibold py-3 px-5 rounded-md transition-all duration-200 ease-in-out hover:bg-white/20 hover:border-white/30 active:scale-95 text-base"
-                    aria-label="Press and hold to see original image"
-                >
-                    <EyeIcon className="w-5 h-5 mr-2" />
-                    Compare
-                </button>
+                  <>
+                    <button 
+                        onMouseDown={() => setIsComparing(true)}
+                        onMouseUp={() => setIsComparing(false)}
+                        onMouseLeave={() => setIsComparing(false)}
+                        onTouchStart={() => setIsComparing(true)}
+                        onTouchEnd={() => setIsComparing(false)}
+                        className="flex items-center justify-center text-center bg-white/10 border border-white/20 text-gray-200 font-semibold py-3 px-5 rounded-md transition-all duration-200 ease-in-out hover:bg-white/20 hover:border-white/30 active:scale-95 text-base"
+                        aria-label="Press and hold to see original image"
+                    >
+                        <EyeIcon className="w-5 h-5 mr-2" />
+                        Compare
+                    </button>
+                    <button 
+                        onClick={() => {
+                            const nextState = !isSplitView;
+                            if (nextState) {
+                                resetViewTransform();
+                            }
+                            setIsSplitView(nextState);
+                        }}
+                        className={`flex items-center justify-center text-center border border-white/20 text-gray-200 font-semibold py-3 px-5 rounded-md transition-all duration-200 ease-in-out hover:border-white/30 active:scale-95 text-base ${isSplitView ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-white/10 hover:bg-white/20'}`}
+                        aria-label="Toggle split-screen comparison view"
+                    >
+                        <SplitScreenIcon className="w-5 h-5 mr-2" />
+                        Split View
+                    </button>
+                  </>
                 )}
                  <button 
                     onClick={() => setIsBatchEditModalOpen(true)}
