@@ -1871,7 +1871,7 @@ const App: React.FC = () => {
                 )}
             </div>
 
-            {history.length > 1 && (
+            {history.length > 0 && (
                 <div className="w-full max-w-4xl flex items-center justify-center gap-3 animate-fade-in">
                     <button 
                         onClick={handleUndo}
@@ -1893,8 +1893,7 @@ const App: React.FC = () => {
                     </button>
                     <button 
                         onClick={() => setIsHistoryPanelOpen(true)}
-                        disabled={history.length <= 1}
-                        className="flex items-center justify-center text-center bg-white/10 border border-white/20 text-gray-200 font-semibold py-3 px-5 rounded-md transition-all duration-200 ease-in-out hover:bg-white/20 hover:border-white/30 active:scale-95 text-base disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-white/5"
+                        className="flex items-center justify-center text-center bg-white/10 border border-white/20 text-gray-200 font-semibold py-3 px-5 rounded-md transition-all duration-200 ease-in-out hover:bg-white/20 hover:border-white/30 active:scale-95 text-base"
                         aria-label="Show edit history"
                     >
                         <HistoryIcon className="w-5 h-5 mr-2" />
