@@ -16,9 +16,11 @@ interface AdjustmentPanelProps {
   isLoading: boolean;
   onSetActivePicker: (picker: ColorPickerType | null) => void;
   activePicker: ColorPickerType | null;
+  onApplyLocalAdjustment: (prompt: string) => void;
+  isAreaSelected: boolean;
 }
 
-const AdjustmentPanel: React.FC<AdjustmentPanelProps> = ({ onApplyAdjustment, onApplyAutoEnhance, onApplySharpen, onApplyGrain, isLoading, onSetActivePicker, activePicker }) => {
+const AdjustmentPanel: React.FC<AdjustmentPanelProps> = ({ onApplyAdjustment, onApplyAutoEnhance, onApplySharpen, onApplyGrain, isLoading, onSetActivePicker, activePicker, onApplyLocalAdjustment, isAreaSelected }) => {
   // State for sliders
   const [exposure, setExposure] = useState(0);
   const [brightness, setBrightness] = useState(0);
@@ -55,6 +57,12 @@ const AdjustmentPanel: React.FC<AdjustmentPanelProps> = ({ onApplyAdjustment, on
     { name: 'Warmer Lighting', prompt: 'Adjust the color temperature to give the image warmer, golden-hour style lighting.', description: 'Gives the photo a warm, sunny, "golden hour" feel.' },
     { name: 'Studio Light', prompt: 'Add dramatic, professional studio lighting to the main subject.', description: 'Adds dramatic lighting to make the main subject pop.' },
     { name: 'Boost Color Vibrancy', prompt: 'Subtly increase the color saturation and vibrancy across the image for a more vivid, colorful look.', description: 'Makes colors pop without looking unnatural.' },
+  ];
+
+  const artStyles = [
+    "Renaissance", "Baroque", "Rococo", "Impressionism", "Post-Impressionism", "Cubism",
+    "Surrealism", "Abstract Expressionism", "Pop Art", "Art Nouveau", "Ukiyo-e", "Steampunk",
+    "Cyberpunk", "Vaporwave", "Bauhaus", "Minimalism", "Psychedelic Art", "Gothic Art", "Art Deco"
   ];
 
   const handlePresetClick = (prompt: string) => {
@@ -500,6 +508,28 @@ const AdjustmentPanel: React.FC<AdjustmentPanelProps> = ({ onApplyAdjustment, on
                     </div>
                 </div>
                 ))}
+            </div>
+          </div>
+
+           <div className="space-y-2 bg-black/20 p-4 rounded-lg border border-gray-700/50">
+            <h3 className="text-lg font-semibold text-gray-300">Art Style Presets</h3>
+            <p className="text-xs text-gray-400 -mt-1">
+              {isAreaSelected
+                ? "Applies the selected style to your masked or retouched area."
+                : "Select an area with the Retouch or Mask tool first."}
+            </p>
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
+              {artStyles.map(style => (
+                <button
+                  key={style}
+                  onClick={() => onApplyLocalAdjustment(`Transform the selected area into the ${style} art style. The result should be a seamless, high-quality artistic interpretation.`)}
+                  disabled={isLoading || !isAreaSelected}
+                  className="text-center bg-white/5 text-gray-300 font-medium py-2 px-2 rounded-md transition-all hover:bg-white/10 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed text-xs"
+                  title={`Apply ${style} style`}
+                >
+                  {style}
+                </button>
+              ))}
             </div>
           </div>
         </div>

@@ -535,6 +535,38 @@ const App: React.FC = () => {
         setIsLoading(false);
     }
   }, [currentImage, prompt, editHotspot, addImageToHistory, maskDataUrl]);
+
+  const handleApplyLocalAdjustment = useCallback(async (adjustmentPrompt: string) => {
+    if (!currentImage) {
+      setError('No image loaded to apply an adjustment to.');
+      return;
+    }
+    if (!editHotspot && !maskDataUrl) {
+        setError('Please click on the image to select an area, or use the Mask tool for a more complex selection.');
+        return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+        let maskFile: File | undefined = undefined;
+        if (maskDataUrl && imgRef.current) {
+            maskFile = await createBlackAndWhiteMask(maskDataUrl, imgRef.current.naturalWidth, imgRef.current.naturalHeight);
+        }
+        
+        const editedImageUrl = await generateEditedImage(currentImage, adjustmentPrompt, editHotspot, maskFile);
+        await addImageToHistory(editedImageUrl);
+        setEditHotspot(null);
+        setDisplayHotspot(null);
+    } catch (err) {
+        const errorMessage = getErrorMessage(err);
+        setError(`Failed to apply the local adjustment. ${errorMessage}`);
+        console.error("Caught error in handleApplyLocalAdjustment:", err);
+    } finally {
+        setIsLoading(false);
+    }
+  }, [currentImage, editHotspot, maskDataUrl, addImageToHistory]);
   
   const handleApplyFilter = useCallback(async (filterPrompt: string) => {
     if (!currentImage) {
@@ -2010,6 +2042,8 @@ const App: React.FC = () => {
                     isLoading={isLoading} 
                     onSetActivePicker={handleSetActivePicker}
                     activePicker={activeColorPicker}
+                    onApplyLocalAdjustment={handleApplyLocalAdjustment}
+                    isAreaSelected={!!editHotspot || !!maskDataUrl}
                 />
                 </div>
                 
