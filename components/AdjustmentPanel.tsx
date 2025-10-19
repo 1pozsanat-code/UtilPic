@@ -29,6 +29,17 @@ const AdjustmentPanel: React.FC<AdjustmentPanelProps> = ({ onApplyAdjustment, on
   const [temperature, setTemperature] = useState(0);
   const [blur, setBlur] = useState(0);
 
+  // State for Color Balance
+  const [highlightsRed, setHighlightsRed] = useState(0);
+  const [highlightsGreen, setHighlightsGreen] = useState(0);
+  const [highlightsBlue, setHighlightsBlue] = useState(0);
+  const [midtonesRed, setMidtonesRed] = useState(0);
+  const [midtonesGreen, setMidtonesGreen] = useState(0);
+  const [midtonesBlue, setMidtonesBlue] = useState(0);
+  const [shadowsRed, setShadowsRed] = useState(0);
+  const [shadowsGreen, setShadowsGreen] = useState(0);
+  const [shadowsBlue, setShadowsBlue] = useState(0);
+
   // State for custom prompt
   const [customPrompt, setCustomPrompt] = useState('');
 
@@ -110,6 +121,52 @@ const AdjustmentPanel: React.FC<AdjustmentPanelProps> = ({ onApplyAdjustment, on
     }
   };
 
+  const isColorBalanceChanged = useMemo(() => 
+    highlightsRed !== 0 || highlightsGreen !== 0 || highlightsBlue !== 0 ||
+    midtonesRed !== 0 || midtonesGreen !== 0 || midtonesBlue !== 0 ||
+    shadowsRed !== 0 || shadowsGreen !== 0 || shadowsBlue !== 0,
+    [highlightsRed, highlightsGreen, highlightsBlue, midtonesRed, midtonesGreen, midtonesBlue, shadowsRed, shadowsGreen, shadowsBlue]
+  );
+
+  const handleResetColorBalance = () => {
+    setHighlightsRed(0);
+    setHighlightsGreen(0);
+    setHighlightsBlue(0);
+    setMidtonesRed(0);
+    setMidtonesGreen(0);
+    setMidtonesBlue(0);
+    setShadowsRed(0);
+    setShadowsGreen(0);
+    setShadowsBlue(0);
+  };
+
+  const handleApplyColorBalance = () => {
+    if (isLoading || !isColorBalanceChanged) return;
+
+    const promptParts = [];
+    const tones = {
+      Highlights: { Red: highlightsRed, Green: highlightsGreen, Blue: highlightsBlue },
+      Midtones: { Red: midtonesRed, Green: midtonesGreen, Blue: midtonesBlue },
+      Shadows: { Red: shadowsRed, Green: shadowsGreen, Blue: shadowsBlue },
+    };
+
+    for (const [toneName, colors] of Object.entries(tones)) {
+      const changes = [];
+      if (colors.Red !== 0) changes.push(`${colors.Red > 0 ? 'add' : 'remove'} ${Math.abs(colors.Red)}% Red`);
+      if (colors.Green !== 0) changes.push(`${colors.Green > 0 ? 'add' : 'remove'} ${Math.abs(colors.Green)}% Green`);
+      if (colors.Blue !== 0) changes.push(`${colors.Blue > 0 ? 'add' : 'remove'} ${Math.abs(colors.Blue)}% Blue`);
+
+      if (changes.length > 0) {
+        promptParts.push(`in the ${toneName}, ${changes.join(', ')}`);
+      }
+    }
+    
+    if (promptParts.length > 0) {
+      const fullPrompt = `Perform a precise color balance adjustment. ${promptParts.join('; ')}. The changes should be subtle and maintain a photorealistic look.`;
+      onApplyAdjustment(fullPrompt);
+    }
+  };
+
 
   return (
     <div className="w-full bg-gray-800/50 border border-gray-700 rounded-lg p-4 flex flex-col gap-6 animate-fade-in backdrop-blur-sm">
@@ -156,6 +213,97 @@ const AdjustmentPanel: React.FC<AdjustmentPanelProps> = ({ onApplyAdjustment, on
             Apply Sliders
           </button>
           
+          <div className="relative mt-4">
+            <div className="absolute inset-0 flex items-center" aria-hidden="true">
+              <div className="w-full border-t border-gray-600" />
+            </div>
+            <div className="relative flex justify-center">
+              <span className="bg-gray-800/50 px-2 text-sm text-gray-500 backdrop-blur-sm">Or</span>
+            </div>
+          </div>
+
+           {/* Color Balance Section */}
+            <div className="space-y-4 pt-2">
+                <div className="flex justify-between items-center">
+                    <h3 className="text-lg font-semibold text-gray-300">Color Balance</h3>
+                    <button
+                        onClick={handleResetColorBalance}
+                        disabled={isLoading || !isColorBalanceChanged}
+                        className="text-xs text-blue-400 hover:text-blue-300 disabled:opacity-50"
+                    >
+                        Reset
+                    </button>
+                </div>
+                
+                {/* Highlights */}
+                <div className="space-y-2">
+                    <h4 className="text-sm font-medium text-gray-400">Highlights</h4>
+                    <div className="flex items-center gap-2">
+                        <span className="w-1.5 h-4 rounded-full bg-red-500/80"></span>
+                        <input type="range" min="-100" max="100" value={highlightsRed} onChange={(e) => setHighlightsRed(Number(e.target.value))} className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-red-500" disabled={isLoading} />
+                        <span className="text-gray-300 w-12 text-center bg-gray-700/80 px-2 py-0.5 rounded-md text-xs">{highlightsRed}</span>
+                    </div>
+                     <div className="flex items-center gap-2">
+                        <span className="w-1.5 h-4 rounded-full bg-green-500/80"></span>
+                        <input type="range" min="-100" max="100" value={highlightsGreen} onChange={(e) => setHighlightsGreen(Number(e.target.value))} className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-green-500" disabled={isLoading} />
+                        <span className="text-gray-300 w-12 text-center bg-gray-700/80 px-2 py-0.5 rounded-md text-xs">{highlightsGreen}</span>
+                    </div>
+                     <div className="flex items-center gap-2">
+                        <span className="w-1.5 h-4 rounded-full bg-blue-500/80"></span>
+                        <input type="range" min="-100" max="100" value={highlightsBlue} onChange={(e) => setHighlightsBlue(Number(e.target.value))} className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500" disabled={isLoading} />
+                        <span className="text-gray-300 w-12 text-center bg-gray-700/80 px-2 py-0.5 rounded-md text-xs">{highlightsBlue}</span>
+                    </div>
+                </div>
+
+                {/* Midtones */}
+                <div className="space-y-2">
+                    <h4 className="text-sm font-medium text-gray-400">Midtones</h4>
+                    <div className="flex items-center gap-2">
+                        <span className="w-1.5 h-4 rounded-full bg-red-500/80"></span>
+                        <input type="range" min="-100" max="100" value={midtonesRed} onChange={(e) => setMidtonesRed(Number(e.target.value))} className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-red-500" disabled={isLoading} />
+                        <span className="text-gray-300 w-12 text-center bg-gray-700/80 px-2 py-0.5 rounded-md text-xs">{midtonesRed}</span>
+                    </div>
+                     <div className="flex items-center gap-2">
+                        <span className="w-1.5 h-4 rounded-full bg-green-500/80"></span>
+                        <input type="range" min="-100" max="100" value={midtonesGreen} onChange={(e) => setMidtonesGreen(Number(e.target.value))} className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-green-500" disabled={isLoading} />
+                        <span className="text-gray-300 w-12 text-center bg-gray-700/80 px-2 py-0.5 rounded-md text-xs">{midtonesGreen}</span>
+                    </div>
+                     <div className="flex items-center gap-2">
+                        <span className="w-1.5 h-4 rounded-full bg-blue-500/80"></span>
+                        <input type="range" min="-100" max="100" value={midtonesBlue} onChange={(e) => setMidtonesBlue(Number(e.target.value))} className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500" disabled={isLoading} />
+                        <span className="text-gray-300 w-12 text-center bg-gray-700/80 px-2 py-0.5 rounded-md text-xs">{midtonesBlue}</span>
+                    </div>
+                </div>
+
+                {/* Shadows */}
+                <div className="space-y-2">
+                    <h4 className="text-sm font-medium text-gray-400">Shadows</h4>
+                    <div className="flex items-center gap-2">
+                        <span className="w-1.5 h-4 rounded-full bg-red-500/80"></span>
+                        <input type="range" min="-100" max="100" value={shadowsRed} onChange={(e) => setShadowsRed(Number(e.target.value))} className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-red-500" disabled={isLoading} />
+                        <span className="text-gray-300 w-12 text-center bg-gray-700/80 px-2 py-0.5 rounded-md text-xs">{shadowsRed}</span>
+                    </div>
+                     <div className="flex items-center gap-2">
+                        <span className="w-1.5 h-4 rounded-full bg-green-500/80"></span>
+                        <input type="range" min="-100" max="100" value={shadowsGreen} onChange={(e) => setShadowsGreen(Number(e.target.value))} className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-green-500" disabled={isLoading} />
+                        <span className="text-gray-300 w-12 text-center bg-gray-700/80 px-2 py-0.5 rounded-md text-xs">{shadowsGreen}</span>
+                    </div>
+                     <div className="flex items-center gap-2">
+                        <span className="w-1.5 h-4 rounded-full bg-blue-500/80"></span>
+                        <input type="range" min="-100" max="100" value={shadowsBlue} onChange={(e) => setShadowsBlue(Number(e.target.value))} className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500" disabled={isLoading} />
+                        <span className="text-gray-300 w-12 text-center bg-gray-700/80 px-2 py-0.5 rounded-md text-xs">{shadowsBlue}</span>
+                    </div>
+                </div>
+
+                <button
+                    onClick={handleApplyColorBalance}
+                    disabled={isLoading || !isColorBalanceChanged}
+                    className="w-full mt-2 bg-gradient-to-br from-blue-600 to-blue-500 text-white font-bold py-3 px-4 rounded-lg transition-all duration-200 ease-in-out shadow-md shadow-blue-500/20 hover:shadow-lg hover:shadow-blue-500/30 hover:-translate-y-px active:scale-95 active:shadow-inner text-base disabled:from-blue-800 disabled:to-blue-700 disabled:shadow-none disabled:cursor-not-allowed disabled:transform-none"
+                >
+                    Apply Color Balance
+                </button>
+            </div>
+
           <div className="relative mt-4">
             <div className="absolute inset-0 flex items-center" aria-hidden="true">
               <div className="w-full border-t border-gray-600" />
