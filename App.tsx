@@ -234,6 +234,38 @@ const tools = [
   { id: 'watermark', label: 'Watermark', icon: WatermarkIcon },
 ] as const;
 
+// Helper to determine if an image has a solid background color, by checking its corners.
+const getSolidBackgroundColor = (ctx: CanvasRenderingContext2D, width: number, height: number): { r: number; g: number; b: number } | null => {
+    if (width < 2 || height < 2) return null; // Not enough pixels to check corners
+    
+    const p1 = ctx.getImageData(0, 0, 1, 1).data;
+    // If the top-left pixel is already transparent, assume the image has a proper alpha channel and doesn't need keying.
+    if (p1[3] < 250) return null; 
+
+    const p2 = ctx.getImageData(width - 1, 0, 1, 1).data;
+    const p3 = ctx.getImageData(0, height - 1, 1, 1).data;
+    const p4 = ctx.getImageData(width - 1, height - 1, 1, 1).data;
+
+    // All corners must be opaque to be considered for solid background removal.
+    if (p1[3] < 250 || p2[3] < 250 || p3[3] < 250 || p4[3] < 250) {
+        return null;
+    }
+
+    const tolerance = 15;
+    
+    const isSimilar = (d1: Uint8ClampedArray, d2: Uint8ClampedArray) => 
+        Math.abs(d1[0] - d2[0]) < tolerance &&
+        Math.abs(d1[1] - d2[1]) < tolerance &&
+        Math.abs(d1[2] - d2[2]) < tolerance;
+    
+    // Check if all corners are similar in color
+    if (isSimilar(p1, p2) && isSimilar(p1, p3) && isSimilar(p1, p4)) {
+        return { r: p1[0], g: p1[1], b: p1[2] };
+    }
+    
+    return null;
+};
+
 
 const App: React.FC = () => {
   const [history, setHistory] = useState<string[]>([]);
@@ -813,49 +845,46 @@ const App: React.FC = () => {
         await new Promise<void>((resolve, reject) => {
             foreground.onload = () => resolve();
             foreground.onerror = (err) => reject(err);
-            foreground.src = currentImageUrl; // This is the potentially flawed image with transparency
+            foreground.src = currentImageUrl; // This is the image from background removal
         });
 
-        // Step 1: Create a clean foreground with true transparency by keying out the background color.
+        // Step 1: Create a clean foreground by keying out the background color if a solid one is detected.
         const fgCanvas = document.createElement('canvas');
         fgCanvas.width = foreground.naturalWidth;
         fgCanvas.height = foreground.naturalHeight;
-        const fgCtx = fgCanvas.getContext('2d');
+        const fgCtx = fgCanvas.getContext('2d', { willReadFrequently: true }); // Optimization for frequent getImageData calls
         if (!fgCtx) {
             throw new Error('Could not create foreground canvas context.');
         }
         
-        // Draw the potentially flawed foreground image to a temporary canvas
         fgCtx.drawImage(foreground, 0, 0);
         
-        // Determine the background color to remove by sampling the top-left pixel.
-        // This handles cases where the AI returns a subject on a solid black or white background.
-        const cornerPixel = fgCtx.getImageData(0, 0, 1, 1).data;
-        const bgR = cornerPixel[0];
-        const bgG = cornerPixel[1];
-        const bgB = cornerPixel[2];
-        
-        const imageData = fgCtx.getImageData(0, 0, fgCanvas.width, fgCanvas.height);
-        const data = imageData.data;
-        const tolerance = 20; // Tolerance for near-black/white colors
+        // Check for and remove a solid background color (handles cases where AI returns a solid bg instead of transparency)
+        const solidBgColor = getSolidBackgroundColor(fgCtx, fgCanvas.width, fgCanvas.height);
 
-        for (let i = 0; i < data.length; i += 4) {
-            const r = data[i];
-            const g = data[i + 1];
-            const b = data[i + 2];
-            
-            // Check if the pixel color is close to the determined background color
-            if (
-                Math.abs(r - bgR) < tolerance &&
-                Math.abs(g - bgG) < tolerance &&
-                Math.abs(b - bgB) < tolerance
-            ) {
-                // If it is, make it fully transparent
-                data[i + 3] = 0;
+        if (solidBgColor) {
+            console.log("Solid background color detected, keying it out:", solidBgColor);
+            const imageData = fgCtx.getImageData(0, 0, fgCanvas.width, fgCanvas.height);
+            const data = imageData.data;
+            const tolerance = 25; 
+
+            for (let i = 0; i < data.length; i += 4) {
+                const r = data[i];
+                const g = data[i + 1];
+                const b = data[i + 2];
+                
+                if (
+                    Math.abs(r - solidBgColor.r) < tolerance &&
+                    Math.abs(g - solidBgColor.g) < tolerance &&
+                    Math.abs(b - solidBgColor.b) < tolerance
+                ) {
+                    data[i + 3] = 0; // Make pixel transparent
+                }
             }
+            fgCtx.putImageData(imageData, 0, 0);
+        } else {
+             console.log("No solid background detected, assuming image has transparency.");
         }
-        // Put the corrected pixel data back. `fgCanvas` now holds the subject with a proper transparent background.
-        fgCtx.putImageData(imageData, 0, 0);
 
 
         // --- COMPOSITING LOGIC ---
@@ -867,10 +896,9 @@ const App: React.FC = () => {
             throw new Error('Could not get final canvas context.');
         }
         
-        // Set high-quality scaling for better results when the background is smaller than the foreground.
         finalCtx.imageSmoothingQuality = 'high';
 
-        // Step 2: Prepare and draw the new background layer onto the final canvas.
+        // Step 2: Prepare and draw the new background layer.
         if (settings.type === 'color') {
             finalCtx.fillStyle = settings.value;
             finalCtx.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
@@ -883,6 +911,8 @@ const App: React.FC = () => {
                 isObjectURL = true;
             } else { // url
                 try {
+                    // Note: This can fail due to CORS. Using a proxy or server-side fetch is more robust.
+                    // For this client-side app, we'll try and provide a good error message.
                     const response = await fetch(settings.value);
                     if (!response.ok) throw new Error(`Failed to fetch image from URL (status: ${response.status})`);
                     const blob = await response.blob();
@@ -899,6 +929,8 @@ const App: React.FC = () => {
             }
 
             const background = new Image();
+            // Important for CORS-loaded images
+            background.crossOrigin = "anonymous";
             await new Promise<void>((resolve, reject) => {
                 background.onload = () => resolve();
                 background.onerror = (err) => reject(err);
