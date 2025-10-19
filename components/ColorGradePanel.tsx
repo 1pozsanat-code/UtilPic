@@ -4,14 +4,16 @@
 */
 
 import React, { useState } from 'react';
+import { DocumentDuplicateIcon } from './icons.tsx';
 
 interface ColorGradePanelProps {
   onApplyColorGrade: (prompt: string) => void;
   isLoading: boolean;
+  onBatchApply: (prompt: string, name: string) => void;
 }
 
-const ColorGradePanel: React.FC<ColorGradePanelProps> = ({ onApplyColorGrade, isLoading }) => {
-  const [selectedPresetPrompt, setSelectedPresetPrompt] = useState<string | null>(null);
+const ColorGradePanel: React.FC<ColorGradePanelProps> = ({ onApplyColorGrade, isLoading, onBatchApply }) => {
+  const [selectedPreset, setSelectedPreset] = useState<{ name: string; prompt: string; } | null>(null);
 
   const presets = [
     // Film & TV Inspired
@@ -38,8 +40,8 @@ const ColorGradePanel: React.FC<ColorGradePanelProps> = ({ onApplyColorGrade, is
   ];
   
   const handleApply = () => {
-    if (selectedPresetPrompt) {
-      onApplyColorGrade(selectedPresetPrompt);
+    if (selectedPreset) {
+      onApplyColorGrade(selectedPreset.prompt);
     }
   };
 
@@ -51,9 +53,9 @@ const ColorGradePanel: React.FC<ColorGradePanelProps> = ({ onApplyColorGrade, is
         {presets.map(preset => (
            <div key={preset.name} className="relative group">
             <button
-              onClick={() => setSelectedPresetPrompt(preset.prompt)}
+              onClick={() => setSelectedPreset(preset)}
               disabled={isLoading}
-              className={`w-full text-center bg-white/10 border border-transparent text-gray-200 font-semibold py-3 px-4 rounded-md transition-all duration-200 ease-in-out hover:bg-white/20 hover:border-white/20 active:scale-95 text-base disabled:opacity-50 disabled:cursor-not-allowed ${selectedPresetPrompt === preset.prompt ? 'ring-2 ring-offset-2 ring-offset-gray-800 ring-blue-500' : ''}`}
+              className={`w-full text-center bg-white/10 border border-transparent text-gray-200 font-semibold py-3 px-4 rounded-md transition-all duration-200 ease-in-out hover:bg-white/20 hover:border-white/20 active:scale-95 text-base disabled:opacity-50 disabled:cursor-not-allowed ${selectedPreset?.prompt === preset.prompt ? 'ring-2 ring-offset-2 ring-offset-gray-800 ring-blue-500' : ''}`}
             >
               {preset.name}
             </button>
@@ -66,14 +68,23 @@ const ColorGradePanel: React.FC<ColorGradePanelProps> = ({ onApplyColorGrade, is
         ))}
       </div>
       
-      {selectedPresetPrompt && (
-        <div className="animate-fade-in flex flex-col gap-4 pt-2">
+      {selectedPreset && (
+        <div className="animate-fade-in flex flex-col sm:flex-row gap-2 pt-2">
           <button
             onClick={handleApply}
-            className="w-full bg-gradient-to-br from-blue-600 to-blue-500 text-white font-bold py-4 px-6 rounded-lg transition-all duration-300 ease-in-out shadow-lg shadow-blue-500/20 hover:shadow-xl hover:shadow-blue-500/40 hover:-translate-y-px active:scale-95 active:shadow-inner text-base disabled:from-blue-800 disabled:to-blue-700 disabled:shadow-none disabled:cursor-not-allowed disabled:transform-none"
-            disabled={isLoading || !selectedPresetPrompt.trim()}
+            className="flex-grow bg-gradient-to-br from-blue-600 to-blue-500 text-white font-bold py-4 px-6 rounded-lg transition-all duration-300 ease-in-out shadow-lg shadow-blue-500/20 hover:shadow-xl hover:shadow-blue-500/40 hover:-translate-y-px active:scale-95 active:shadow-inner text-base disabled:from-blue-800 disabled:to-blue-700 disabled:shadow-none disabled:cursor-not-allowed disabled:transform-none"
+            disabled={isLoading || !selectedPreset.prompt.trim()}
           >
             Apply Color Grade
+          </button>
+          <button
+              onClick={() => onBatchApply(selectedPreset.prompt, selectedPreset.name)}
+              className="flex-shrink-0 flex items-center justify-center gap-2 bg-white/10 text-gray-200 font-semibold py-3 px-5 rounded-md transition-all duration-200 ease-in-out hover:bg-white/20 active:scale-95 disabled:opacity-50"
+              disabled={isLoading}
+              title="Apply this color grade to multiple images"
+          >
+              <DocumentDuplicateIcon className="w-5 h-5" />
+              Batch
           </button>
         </div>
       )}

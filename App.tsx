@@ -30,6 +30,7 @@ import ColorGradePanel from './components/ColorGradePanel.tsx';
 import MaskEditor from './components/MaskEditor.tsx';
 import ViewControls from './components/ViewControls.tsx';
 import BatchEditModal from './components/BatchEditModal.tsx';
+import BatchPresetModal from './components/BatchPresetModal.tsx';
 
 
 // Helper to convert a data URL string to a File object
@@ -266,6 +267,8 @@ const App: React.FC = () => {
   const [isBatchEditModalOpen, setIsBatchEditModalOpen] = useState<boolean>(false);
   const [isBgRemovalMode, setIsBgRemovalMode] = useState<boolean>(false);
   const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState<boolean>(false);
+  const [isBatchPresetModalOpen, setIsBatchPresetModalOpen] = useState<boolean>(false);
+  const [batchPresetInfo, setBatchPresetInfo] = useState<{ name: string; prompt: string; type: 'filter' | 'colorGrade' } | null>(null);
   const [isWBPicking, setIsWBPicking] = useState<boolean>(false); // For White Balance Picker
   const [maskDataUrl, setMaskDataUrl] = useState<string | null>(null);
 
@@ -1496,6 +1499,11 @@ const App: React.FC = () => {
     setActiveTab('retouch'); // Switch back to retouch to enter prompt
   }, []);
 
+  const handleOpenBatchPresetModal = useCallback((prompt: string, name:string, type: 'filter' | 'colorGrade') => {
+    setBatchPresetInfo({ prompt, name, type });
+    setIsBatchPresetModalOpen(true);
+  }, []);
+
   const onImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
     const { naturalWidth, naturalHeight } = e.currentTarget;
     setImageAspectRatio(naturalWidth / naturalHeight);
@@ -1928,12 +1936,12 @@ const App: React.FC = () => {
                 
                 {/* Filters Panel */}
                 <div className={`col-start-1 row-start-1 transition-all duration-300 ease-out ${activeTab === 'filters' ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-5 scale-[0.97] pointer-events-none'}`}>
-                <FilterPanel onApplyFilter={handleApplyFilter} isLoading={isLoading} />
+                <FilterPanel onApplyFilter={handleApplyFilter} isLoading={isLoading} onBatchApply={(prompt, name) => handleOpenBatchPresetModal(prompt, name, 'filter')} />
                 </div>
 
                 {/* Color Grade Panel */}
                 <div className={`col-start-1 row-start-1 transition-all duration-300 ease-out ${activeTab === 'colorGrade' ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-5 scale-[0.97] pointer-events-none'}`}>
-                <ColorGradePanel onApplyColorGrade={handleApplyColorGrade} isLoading={isLoading} />
+                <ColorGradePanel onApplyColorGrade={handleApplyColorGrade} isLoading={isLoading} onBatchApply={(prompt, name) => handleOpenBatchPresetModal(prompt, name, 'colorGrade')} />
                 </div>
 
                 {/* Background Panel */}
@@ -2108,6 +2116,15 @@ const App: React.FC = () => {
           onClose={() => setIsBatchEditModalOpen(false)}
           originalImage={originalImage}
           editedImage={currentImage}
+        />
+      )}
+      {isBatchPresetModalOpen && batchPresetInfo && (
+        <BatchPresetModal
+          isOpen={isBatchPresetModalOpen}
+          onClose={() => setIsBatchPresetModalOpen(false)}
+          presetName={batchPresetInfo.name}
+          presetPrompt={batchPresetInfo.prompt}
+          presetType={batchPresetInfo.type}
         />
       )}
       {currentImageUrl && (
