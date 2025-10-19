@@ -40,6 +40,12 @@ const AdjustmentPanel: React.FC<AdjustmentPanelProps> = ({ onApplyAdjustment, on
   const [shadowsGreen, setShadowsGreen] = useState(0);
   const [shadowsBlue, setShadowsBlue] = useState(0);
 
+  // State for Vignette
+  const [vignetteAmount, setVignetteAmount] = useState(0);
+  const [vignetteSize, setVignetteSize] = useState(75);
+  const [vignetteFeather, setVignetteFeather] = useState(50);
+
+
   // State for custom prompt
   const [customPrompt, setCustomPrompt] = useState('');
 
@@ -49,7 +55,6 @@ const AdjustmentPanel: React.FC<AdjustmentPanelProps> = ({ onApplyAdjustment, on
     { name: 'Warmer Lighting', prompt: 'Adjust the color temperature to give the image warmer, golden-hour style lighting.', description: 'Gives the photo a warm, sunny, "golden hour" feel.' },
     { name: 'Studio Light', prompt: 'Add dramatic, professional studio lighting to the main subject.', description: 'Adds dramatic lighting to make the main subject pop.' },
     { name: 'Boost Color Vibrancy', prompt: 'Subtly increase the color saturation and vibrancy across the image for a more vivid, colorful look.', description: 'Makes colors pop without looking unnatural.' },
-    { name: 'Vignette', prompt: 'Apply a subtle vignette effect to the image, darkening the edges slightly to draw focus to the center.', description: 'Darkens the corners of the photo to draw focus to the subject.' },
   ];
 
   const handlePresetClick = (prompt: string) => {
@@ -167,6 +172,36 @@ const AdjustmentPanel: React.FC<AdjustmentPanelProps> = ({ onApplyAdjustment, on
     }
   };
 
+  const isVignetteChanged = useMemo(() => vignetteAmount !== 0, [vignetteAmount]);
+
+  const handleResetVignette = () => {
+    setVignetteAmount(0);
+    setVignetteSize(75);
+    setVignetteFeather(50);
+  };
+
+  const handleApplyVignette = () => {
+    if (isLoading || !isVignetteChanged) return;
+
+    const effect = vignetteAmount > 0 ? 'darkening' : 'lightening (reverse vignette)';
+    const amount = Math.abs(vignetteAmount);
+
+    let sizeDescription = '';
+    if (vignetteSize <= 25) sizeDescription = 'a very large size, just affecting the corners';
+    else if (vignetteSize <= 50) sizeDescription = 'a large size, extending moderately from the edges';
+    else if (vignetteSize <= 75) sizeDescription = 'a medium size, creating a clear central focus';
+    else sizeDescription = 'a small and tight size, focused on the very center';
+    
+    let featherDescription = '';
+    if (vignetteFeather <= 25) featherDescription = 'a hard, defined edge';
+    else if (vignetteFeather <= 50) featherDescription = 'a moderately soft, feathered transition';
+    else if (vignetteFeather <= 75) featherDescription = 'a very soft and gradual fade';
+    else featherDescription = 'an extremely soft, almost imperceptible transition';
+
+    const prompt = `Apply a photorealistic vignette effect. It should be a ${effect} with an intensity of ${amount}%. The effect should have ${sizeDescription} and ${featherDescription}. Ensure the final result looks natural and blends seamlessly.`;
+    
+    onApplyAdjustment(prompt);
+  };
 
   return (
     <div className="w-full bg-gray-800/50 border border-gray-700 rounded-lg p-4 flex flex-col gap-6 animate-fade-in backdrop-blur-sm">
@@ -213,15 +248,6 @@ const AdjustmentPanel: React.FC<AdjustmentPanelProps> = ({ onApplyAdjustment, on
             Apply Sliders
           </button>
           
-          <div className="relative mt-4">
-            <div className="absolute inset-0 flex items-center" aria-hidden="true">
-              <div className="w-full border-t border-gray-600" />
-            </div>
-            <div className="relative flex justify-center">
-              <span className="bg-gray-800/50 px-2 text-sm text-gray-500 backdrop-blur-sm">Or</span>
-            </div>
-          </div>
-
            {/* Color Balance Section */}
             <div className="space-y-4 pt-2">
                 <div className="flex justify-between items-center">
@@ -301,6 +327,51 @@ const AdjustmentPanel: React.FC<AdjustmentPanelProps> = ({ onApplyAdjustment, on
                     className="w-full mt-2 bg-gradient-to-br from-blue-600 to-blue-500 text-white font-bold py-3 px-4 rounded-lg transition-all duration-200 ease-in-out shadow-md shadow-blue-500/20 hover:shadow-lg hover:shadow-blue-500/30 hover:-translate-y-px active:scale-95 active:shadow-inner text-base disabled:from-blue-800 disabled:to-blue-700 disabled:shadow-none disabled:cursor-not-allowed disabled:transform-none"
                 >
                     Apply Color Balance
+                </button>
+            </div>
+
+            {/* Vignette Section */}
+            <div className="space-y-4 pt-2">
+                <div className="flex justify-between items-center">
+                    <h3 className="text-lg font-semibold text-gray-300">Vignette</h3>
+                    <button
+                        onClick={handleResetVignette}
+                        disabled={isLoading || vignetteAmount === 0}
+                        className="text-xs text-blue-400 hover:text-blue-300 disabled:opacity-50"
+                    >
+                        Reset
+                    </button>
+                </div>
+                {/* Amount Slider */}
+                <div>
+                    <div className="flex justify-between items-center text-sm mb-1">
+                        <label htmlFor="vignette-amount" className="font-medium text-gray-400">Amount</label>
+                        <span className="text-gray-300 bg-gray-700/80 px-2 py-0.5 rounded-md">{vignetteAmount}</span>
+                    </div>
+                    <input id="vignette-amount" type="range" min="-100" max="100" value={vignetteAmount} onChange={(e) => setVignetteAmount(Number(e.target.value))} className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer" disabled={isLoading} />
+                </div>
+                {/* Size Slider */}
+                <div>
+                    <div className="flex justify-between items-center text-sm mb-1">
+                        <label htmlFor="vignette-size" className="font-medium text-gray-400">Size</label>
+                        <span className="text-gray-300 bg-gray-700/80 px-2 py-0.5 rounded-md">{vignetteSize}</span>
+                    </div>
+                    <input id="vignette-size" type="range" min="0" max="100" value={vignetteSize} onChange={(e) => setVignetteSize(Number(e.target.value))} className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer" disabled={isLoading} />
+                </div>
+                {/* Feather Slider */}
+                <div>
+                    <div className="flex justify-between items-center text-sm mb-1">
+                        <label htmlFor="vignette-feather" className="font-medium text-gray-400">Feather</label>
+                        <span className="text-gray-300 bg-gray-700/80 px-2 py-0.5 rounded-md">{vignetteFeather}</span>
+                    </div>
+                    <input id="vignette-feather" type="range" min="0" max="100" value={vignetteFeather} onChange={(e) => setVignetteFeather(Number(e.target.value))} className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer" disabled={isLoading} />
+                </div>
+                <button
+                    onClick={handleApplyVignette}
+                    disabled={isLoading || !isVignetteChanged}
+                    className="w-full mt-2 bg-gradient-to-br from-blue-600 to-blue-500 text-white font-bold py-3 px-4 rounded-lg transition-all duration-200 ease-in-out shadow-md shadow-blue-500/20 hover:shadow-lg hover:shadow-blue-500/30 hover:-translate-y-px active:scale-95 active:shadow-inner text-base disabled:from-blue-800 disabled:to-blue-700 disabled:shadow-none disabled:cursor-not-allowed disabled:transform-none"
+                >
+                    Apply Vignette
                 </button>
             </div>
 
