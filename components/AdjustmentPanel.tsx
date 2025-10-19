@@ -4,7 +4,9 @@
 */
 
 import React, { useState, useMemo } from 'react';
-import { EyedropperWBIcon, SparklesIcon, SharpenIcon, GrainIcon } from './icons.tsx';
+import { EyedropperWBIcon, EyedropperWhiteIcon, EyedropperBlackIcon, SparklesIcon, SharpenIcon, GrainIcon } from './icons.tsx';
+
+export type ColorPickerType = 'white' | 'black' | 'gray';
 
 interface AdjustmentPanelProps {
   onApplyAdjustment: (prompt: string) => void;
@@ -12,11 +14,11 @@ interface AdjustmentPanelProps {
   onApplySharpen: (intensity: string) => void;
   onApplyGrain: (intensity: string) => void;
   isLoading: boolean;
-  onToggleWBPicker: () => void;
-  isWBPicking: boolean;
+  onSetActivePicker: (picker: ColorPickerType | null) => void;
+  activePicker: ColorPickerType | null;
 }
 
-const AdjustmentPanel: React.FC<AdjustmentPanelProps> = ({ onApplyAdjustment, onApplyAutoEnhance, onApplySharpen, onApplyGrain, isLoading, onToggleWBPicker, isWBPicking }) => {
+const AdjustmentPanel: React.FC<AdjustmentPanelProps> = ({ onApplyAdjustment, onApplyAutoEnhance, onApplySharpen, onApplyGrain, isLoading, onSetActivePicker, activePicker }) => {
   // State for sliders
   const [exposure, setExposure] = useState(0);
   const [brightness, setBrightness] = useState(0);
@@ -180,27 +182,48 @@ const AdjustmentPanel: React.FC<AdjustmentPanelProps> = ({ onApplyAdjustment, on
 
         {/* Presets and Tools */}
         <div className="space-y-4">
-          <div className="space-y-2 bg-black/20 p-4 rounded-lg border border-gray-700/50">
-            <h3 className="text-lg font-semibold text-gray-300">Tools</h3>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-2 bg-black/20 p-4 rounded-lg border border-gray-700/50">
+                <h3 className="text-lg font-semibold text-gray-300">Automatic Tools</h3>
                 <button
                     onClick={onApplyAutoEnhance}
                     disabled={isLoading}
-                    className="flex items-center justify-center gap-2 text-center bg-white/10 text-gray-200 font-semibold py-3 px-4 rounded-md transition-all hover:bg-white/20 active:scale-95 disabled:opacity-50 text-base"
+                    className="flex w-full items-center justify-center gap-2 text-center bg-white/10 text-gray-200 font-semibold py-3 px-4 rounded-md transition-all hover:bg-white/20 active:scale-95 disabled:opacity-50 text-base"
                 >
                     <SparklesIcon className="w-5 h-5" />
                     Auto Enhance
                 </button>
-                <button
-                    onClick={onToggleWBPicker}
-                    disabled={isLoading}
-                    className={`flex items-center justify-center gap-2 text-center font-semibold py-3 px-4 rounded-md transition-all active:scale-95 disabled:opacity-50 text-base ${isWBPicking ? 'bg-blue-600 text-white ring-2 ring-offset-2 ring-offset-gray-800 ring-blue-500' : 'bg-white/10 text-gray-200 hover:bg-white/20'}`}
-                >
-                    <EyedropperWBIcon className="w-5 h-5" />
-                    White Balance
-                </button>
             </div>
-          </div>
+
+            <div className="space-y-2 bg-black/20 p-4 rounded-lg border border-gray-700/50">
+                <h3 className="text-lg font-semibold text-gray-300">Levels & White Balance</h3>
+                <p className="text-xs text-gray-400 -mt-1">Use eyedroppers to correct colors and tones.</p>
+                <div className="grid grid-cols-3 gap-2">
+                    <button
+                        onClick={() => onSetActivePicker('white')}
+                        disabled={isLoading}
+                        className={`flex flex-col items-center justify-center gap-1 text-center font-semibold py-2 px-2 rounded-md transition-all active:scale-95 disabled:opacity-50 text-xs ${activePicker === 'white' ? 'bg-blue-600 text-white ring-2 ring-offset-2 ring-offset-gray-800 ring-blue-500' : 'bg-white/10 text-gray-200 hover:bg-white/20'}`}
+                    >
+                        <EyedropperWhiteIcon className="w-5 h-5" />
+                        White Point
+                    </button>
+                    <button
+                        onClick={() => onSetActivePicker('gray')}
+                        disabled={isLoading}
+                        className={`flex flex-col items-center justify-center gap-1 text-center font-semibold py-2 px-2 rounded-md transition-all active:scale-95 disabled:opacity-50 text-xs ${activePicker === 'gray' ? 'bg-blue-600 text-white ring-2 ring-offset-2 ring-offset-gray-800 ring-blue-500' : 'bg-white/10 text-gray-200 hover:bg-white/20'}`}
+                    >
+                        <EyedropperWBIcon className="w-5 h-5" />
+                        Gray Point
+                    </button>
+                    <button
+                        onClick={() => onSetActivePicker('black')}
+                        disabled={isLoading}
+                        className={`flex flex-col items-center justify-center gap-1 text-center font-semibold py-2 px-2 rounded-md transition-all active:scale-95 disabled:opacity-50 text-xs ${activePicker === 'black' ? 'bg-blue-600 text-white ring-2 ring-offset-2 ring-offset-gray-800 ring-blue-500' : 'bg-white/10 text-gray-200 hover:bg-white/20'}`}
+                    >
+                        <EyedropperBlackIcon className="w-5 h-5" />
+                        Black Point
+                    </button>
+                </div>
+            </div>
 
           <div className="space-y-2 bg-black/20 p-4 rounded-lg border border-gray-700/50">
             <div className="flex items-center gap-2">

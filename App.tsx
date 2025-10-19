@@ -11,7 +11,7 @@ import { saveImageToHistoryDB, getAllHistoryImagesDB, clearHistoryDB, removeImag
 import Header from './components/Header.tsx';
 import Spinner from './components/Spinner.tsx';
 import FilterPanel from './components/FilterPanel.tsx';
-import AdjustmentPanel from './components/AdjustmentPanel.tsx';
+import AdjustmentPanel, { type ColorPickerType } from './components/AdjustmentPanel.tsx';
 import CropPanel from './components/CropPanel.tsx';
 import UpscalePanel from './components/UpscalePanel.tsx';
 import FaceRetouchPanel from './components/FaceRetouchPanel.tsx';
@@ -269,7 +269,7 @@ const App: React.FC = () => {
   const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState<boolean>(false);
   const [isBatchPresetModalOpen, setIsBatchPresetModalOpen] = useState<boolean>(false);
   const [batchPresetInfo, setBatchPresetInfo] = useState<{ name: string; prompt: string; type: 'filter' | 'colorGrade' } | null>(null);
-  const [isWBPicking, setIsWBPicking] = useState<boolean>(false); // For White Balance Picker
+  const [activeColorPicker, setActiveColorPicker] = useState<ColorPickerType | null>(null);
   const [maskDataUrl, setMaskDataUrl] = useState<string | null>(null);
 
   // State for multi-layer overlays
@@ -291,9 +291,9 @@ const App: React.FC = () => {
     if (!isZoomPanEnabled) return 'default';
     if (viewTransform.scale > 1) return isPanning ? 'grabbing' : 'grab';
     if (activeTab === 'retouch' && !maskDataUrl) return 'crosshair';
-    if (isWBPicking) return 'crosshair';
+    if (activeColorPicker) return 'crosshair';
     return 'default';
-  }, [isZoomPanEnabled, viewTransform.scale, isPanning, activeTab, maskDataUrl, isWBPicking]);
+  }, [isZoomPanEnabled, viewTransform.scale, isPanning, activeTab, maskDataUrl, activeColorPicker]);
 
 
   const resetViewTransform = useCallback(() => {
@@ -355,7 +355,7 @@ const App: React.FC = () => {
         setIsBgRemovalMode(false);
     }
     if (activeTab !== 'adjust') {
-        setIsWBPicking(false);
+        setActiveColorPicker(null);
     }
     if (activeTab === 'zoom') {
         setAspect(undefined); // AI Zoom is always freeform
@@ -1426,7 +1426,7 @@ const App: React.FC = () => {
         return;
     }
 
-    if (isWBPicking) {
+    if (activeColorPicker) {
         const img = imgRef.current;
         if (!img) return;
 
@@ -1442,10 +1442,22 @@ const App: React.FC = () => {
         const pixelData = ctx.getImageData(coords.edit.x, coords.edit.y, 1, 1).data;
         const [r, g, b] = pixelData;
         
-        const prompt = `Perform a precise white balance correction on the entire image. A color that should be neutral gray is currently showing as RGB(${r}, ${g}, ${b}). Adjust the overall color cast of the image to make this color a neutral gray, ensuring the correction is applied naturally across all tones.`;
+        let prompt = '';
+        switch (activeColorPicker) {
+            case 'white':
+                prompt = `Perform a precise levels and white balance correction on the entire image. A color that should be pure white is currently showing as RGB(${r}, ${g}, ${b}). Adjust the overall color cast and highlights to make this color pure white (255, 255, 255) while maintaining natural tones elsewhere.`;
+                break;
+            case 'black':
+                prompt = `Perform a precise levels adjustment on the entire image. A color that should be pure black is currently showing as RGB(${r}, ${g}, ${b}). Adjust the overall shadows to make this color pure black (0, 0, 0) without crushing details in other areas.`;
+                break;
+            case 'gray':
+            default:
+                prompt = `Perform a precise white balance correction on the entire image. A color that should be neutral gray is currently showing as RGB(${r}, ${g}, ${b}). Adjust the overall color cast of the image to make this color a neutral gray, ensuring the correction is applied naturally across all tones.`;
+                break;
+        }
         
         handleApplyAdjustment(prompt);
-        setIsWBPicking(false); // Turn off picking mode after selection
+        setActiveColorPicker(null); // Turn off picking mode after selection
     }
 };
 
@@ -1627,6 +1639,10 @@ const App: React.FC = () => {
     const centerY = rect.top + rect.height / 2;
     zoomAtPoint(newScale, centerX, centerY);
   }, [viewTransform.scale, zoomAtPoint]);
+
+  const handleSetActivePicker = (picker: ColorPickerType | null) => {
+      setActiveColorPicker(current => (current === picker ? null : picker));
+  };
 
   const renderContent = () => {
     if (error) {
@@ -1929,8 +1945,8 @@ const App: React.FC = () => {
                     onApplySharpen={handleApplySharpen}
                     onApplyGrain={handleApplyGrain}
                     isLoading={isLoading} 
-                    onToggleWBPicker={() => setIsWBPicking(prev => !prev)}
-                    isWBPicking={isWBPicking}
+                    onSetActivePicker={handleSetActivePicker}
+                    activePicker={activeColorPicker}
                 />
                 </div>
                 
