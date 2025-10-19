@@ -20,7 +20,7 @@ import WatermarkPanel, { type WatermarkSettings } from './components/WatermarkPa
 import BackgroundPanel, { type BackgroundSettings } from './components/BackgroundPanel.tsx';
 import OverlayPanel, { type OverlayLayer } from './components/OverlayPanel.tsx';
 import ZoomPanel from './components/ZoomPanel.tsx';
-import { UndoIcon, RedoIcon, EyeIcon, HistoryIcon, UserCircleIcon, PhotoIcon, SparklesIcon, SunIcon, EyeDropperIcon, ArrowUpOnSquareIcon, BullseyeIcon, PaletteIcon, MagicWandIcon, CropIcon, LayersIcon, MagnifyingGlassPlusIcon, WatermarkIcon, TuneIcon, MaskIcon } from './components/icons.tsx';
+import { UndoIcon, RedoIcon, EyeIcon, HistoryIcon, UserCircleIcon, PhotoIcon, SparklesIcon, SunIcon, EyeDropperIcon, ArrowUpOnSquareIcon, BullseyeIcon, PaletteIcon, MagicWandIcon, CropIcon, LayersIcon, MagnifyingGlassPlusIcon, WatermarkIcon, TuneIcon, MaskIcon, DocumentDuplicateIcon } from './components/icons.tsx';
 import StartScreen from './components/StartScreen.tsx';
 import RestoreSessionModal from './components/RestoreSessionModal.tsx';
 import DownloadModal, { type DownloadSettings } from './components/DownloadModal.tsx';
@@ -29,6 +29,7 @@ import SuggestionPanel from './components/SuggestionPanel.tsx';
 import ColorGradePanel from './components/ColorGradePanel.tsx';
 import MaskEditor from './components/MaskEditor.tsx';
 import ViewControls from './components/ViewControls.tsx';
+import BatchEditModal from './components/BatchEditModal.tsx';
 
 
 // Helper to convert a data URL string to a File object
@@ -262,6 +263,7 @@ const App: React.FC = () => {
   const [isLoadingSession, setIsLoadingSession] = useState<boolean>(true);
   const [sessionToRestore, setSessionToRestore] = useState<{ historyLength: number, historyIndex: number } | null>(null);
   const [isDownloadModalOpen, setIsDownloadModalOpen] = useState<boolean>(false);
+  const [isBatchEditModalOpen, setIsBatchEditModalOpen] = useState<boolean>(false);
   const [isBgRemovalMode, setIsBgRemovalMode] = useState<boolean>(false);
   const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState<boolean>(false);
   const [isWBPicking, setIsWBPicking] = useState<boolean>(false); // For White Balance Picker
@@ -366,6 +368,11 @@ const App: React.FC = () => {
     if (!currentImageUrl) return null;
     return dataURLtoFile(currentImageUrl, `edit-${historyIndex}.png`);
   }, [currentImageUrl, historyIndex]);
+
+  const originalImage = useMemo<File | null>(() => {
+    if (!originalImageUrl) return null;
+    return dataURLtoFile(originalImageUrl, `original.png`);
+  }, [originalImageUrl]);
 
 
   const canUndo = historyIndex > 0;
@@ -2004,27 +2011,38 @@ const App: React.FC = () => {
                     Compare
                 </button>
                 )}
-
-                <button 
-                    onClick={handleReset}
+                 <button 
+                    onClick={() => setIsBatchEditModalOpen(true)}
                     disabled={!canUndo}
-                    className="text-center bg-transparent border border-white/20 text-gray-200 font-semibold py-3 px-5 rounded-md transition-all duration-200 ease-in-out hover:bg-white/10 hover:border-white/30 active:scale-95 text-base disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-transparent"
+                    className="flex items-center justify-center text-center bg-white/10 border border-white/20 text-gray-200 font-semibold py-3 px-5 rounded-md transition-all duration-200 ease-in-out hover:bg-white/20 hover:border-white/30 active:scale-95 text-base disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-white/5"
+                    aria-label="Batch edit images"
                 >
-                    Reset
-                </button>
-                <button 
-                    onClick={handleUploadNew}
-                    className="text-center bg-white/10 border border-white/20 text-gray-200 font-semibold py-3 px-5 rounded-md transition-all duration-200 ease-in-out hover:bg-white/20 hover:border-white/30 active:scale-95 text-base"
-                >
-                    Upload New
+                    <DocumentDuplicateIcon className="w-5 h-5 mr-2" />
+                    Batch Edit
                 </button>
 
-                <button 
-                    onClick={handleDownload}
-                    className="w-full sm:w-auto flex-grow sm:flex-grow-0 sm:ml-auto bg-gradient-to-br from-green-600 to-green-500 text-white font-bold py-3 px-5 rounded-md transition-all duration-300 ease-in-out shadow-lg shadow-green-500/20 hover:shadow-xl hover:shadow-green-500/40 hover:-translate-y-px active:scale-95 active:shadow-inner text-base"
-                >
-                    Download Image
-                </button>
+                <div className="w-full sm:w-auto flex flex-grow justify-end gap-2 sm:gap-3 mt-4 sm:mt-0">
+                    <button 
+                        onClick={handleReset}
+                        disabled={!canUndo}
+                        className="text-center bg-transparent border border-white/20 text-gray-200 font-semibold py-3 px-5 rounded-md transition-all duration-200 ease-in-out hover:bg-white/10 hover:border-white/30 active:scale-95 text-base disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-transparent"
+                    >
+                        Reset
+                    </button>
+                    <button 
+                        onClick={handleUploadNew}
+                        className="text-center bg-white/10 border border-white/20 text-gray-200 font-semibold py-3 px-5 rounded-md transition-all duration-200 ease-in-out hover:bg-white/20 hover:border-white/30 active:scale-95 text-base"
+                    >
+                        Upload New
+                    </button>
+
+                    <button 
+                        onClick={handleDownload}
+                        className="bg-gradient-to-br from-green-600 to-green-500 text-white font-bold py-3 px-5 rounded-md transition-all duration-300 ease-in-out shadow-lg shadow-green-500/20 hover:shadow-xl hover:shadow-green-500/40 hover:-translate-y-px active:scale-95 active:shadow-inner text-base"
+                    >
+                        Download
+                    </button>
+                </div>
             </div>
         </div>
       </div>
@@ -2064,6 +2082,14 @@ const App: React.FC = () => {
           currentIndex={historyIndex}
           onSelectHistory={handleHistorySelect}
           onClose={() => setIsHistoryPanelOpen(false)}
+        />
+      )}
+      {isBatchEditModalOpen && originalImage && currentImage && (
+        <BatchEditModal
+          isOpen={isBatchEditModalOpen}
+          onClose={() => setIsBatchEditModalOpen(false)}
+          originalImage={originalImage}
+          editedImage={currentImage}
         />
       )}
       {currentImageUrl && (

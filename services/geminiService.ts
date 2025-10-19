@@ -945,3 +945,58 @@ export const generateBackgroundImage = async (
     
     throw new Error('AI model failed to generate a background image. Please try a different prompt.');
 };
+
+/**
+ * Applies an edit style from an example pair to a new target image.
+ * @param originalImage The original, unedited image file.
+ * @param editedImage The final, edited image file that serves as the style example.
+ * @param targetImage The new image to apply the transformation to.
+ * @returns A promise that resolves to the data URL of the newly edited target image.
+ */
+export const applyStyleByExample = async (
+    originalImage: File,
+    editedImage: File,
+    targetImage: File,
+): Promise<string> => {
+    console.log('Starting batch edit by example for:', targetImage.name);
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+
+    const originalImagePart = await fileToPart(originalImage);
+    const editedImagePart = await fileToPart(editedImage);
+    const targetImagePart = await fileToPart(targetImage);
+
+    const prompt = `You are an expert photo editor AI. You will be given three images: 'Original Image', 'Edited Image', and 'Target Image'.
+
+'Original Image' was edited by a user to become 'Edited Image'. Your task is to analyze the transformation that occurred between 'Original Image' and 'Edited Image'. This transformation could be a color grade, a filter, a brightness/contrast adjustment, or a combination of these.
+
+Once you have identified the transformation, apply the *exact same stylistic and tonal transformation* to the 'Target Image'.
+
+CRITICAL INSTRUCTIONS:
+- Do not copy any content from the 'Original Image' or 'Edited Image' onto the 'Target Image'.
+- Only replicate the *style* of the edit (e.g., the color grading, contrast change, filter effect).
+- The content and composition of the 'Target Image' must remain unchanged.
+- The output should be the transformed 'Target Image'.
+
+Output: Return ONLY the final edited image. Do not return text.`;
+
+    const parts = [
+        { text: "Original Image:" },
+        originalImagePart,
+        { text: "Edited Image:" },
+        editedImagePart,
+        { text: "Target Image:" },
+        targetImagePart,
+        { text: prompt },
+    ];
+
+    const response: GenerateContentResponse = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        contents: { parts: parts },
+        config: {
+            safetySettings: safetySettings,
+        },
+    });
+    console.log('Received response from model for batch style transfer.', response);
+    
+    return handleApiResponse(response, 'style transfer');
+};
