@@ -327,7 +327,7 @@ const App: React.FC = () => {
   const cursorStyle = useMemo(() => {
     if (!isZoomPanEnabled) return 'default';
     if (viewTransform.scale > 1) return isPanning ? 'grabbing' : 'grab';
-    if (activeTab === 'retouch' && !maskDataUrl) return 'crosshair';
+    if ((activeTab === 'retouch' || activeTab === 'adjust') && !maskDataUrl && !activeColorPicker) return 'crosshair';
     if (activeColorPicker) return 'crosshair';
     return 'default';
   }, [isZoomPanEnabled, viewTransform.scale, isPanning, activeTab, maskDataUrl, activeColorPicker]);
@@ -445,6 +445,8 @@ const App: React.FC = () => {
     setHistory(newHistory);
     setHistoryIndex(newHistoryIndex);
     // Reset transient states after an action
+    setEditHotspot(null);
+    setDisplayHotspot(null);
     setCrop(undefined);
     setCompletedCrop(undefined);
     setOverlayLayers([]);
@@ -532,8 +534,6 @@ const App: React.FC = () => {
         
         const editedImageUrl = await generateEditedImage(currentImage, prompt, editHotspot, maskFile);
         await addImageToHistory(editedImageUrl);
-        setEditHotspot(null);
-        setDisplayHotspot(null);
     } catch (err) {
         const errorMessage = getErrorMessage(err);
         setError(`Failed to generate the image. ${errorMessage}`);
@@ -564,8 +564,6 @@ const App: React.FC = () => {
         
         const editedImageUrl = await generateEditedImage(currentImage, adjustmentPrompt, editHotspot, maskFile);
         await addImageToHistory(editedImageUrl);
-        setEditHotspot(null);
-        setDisplayHotspot(null);
     } catch (err) {
         const errorMessage = getErrorMessage(err);
         setError(`Failed to apply the local adjustment. ${errorMessage}`);
@@ -1491,7 +1489,8 @@ const App: React.FC = () => {
     const coords = getCoordsFromEvent(e);
     if (!coords) return;
 
-    if (activeTab === 'retouch' && !maskDataUrl) {
+    // Allow setting hotspot in both 'retouch' and 'adjust' tabs if not in a sub-mode like color picking or masking.
+    if ((activeTab === 'retouch' || activeTab === 'adjust') && !maskDataUrl && !activeColorPicker) {
         setDisplayHotspot(coords.display);
         setEditHotspot(coords.edit);
         return;
@@ -1904,7 +1903,7 @@ const App: React.FC = () => {
                 )}
             </div>
         )}
-        {!isSplitView && displayHotspot && !isLoading && activeTab === 'retouch' && !maskDataUrl && (
+        {!isSplitView && displayHotspot && !isLoading && (activeTab === 'retouch' || activeTab === 'adjust') && !maskDataUrl && (
             <div 
                 className="absolute -translate-x-1/2 -translate-y-1/2 z-10 animate-hotspot-appear"
                 style={{ 
