@@ -515,8 +515,8 @@ const AdjustmentPanel: React.FC<AdjustmentPanelProps> = ({ onApplyAdjustment, on
             <h3 className="text-lg font-semibold text-gray-300">Art Style Presets</h3>
             <p className="text-xs text-gray-400 -mt-1">
               {isAreaSelected
-                ? "Applies the selected style to your masked or retouched area."
-                : "Select an area with the Retouch or Mask tool first."}
+                ? "Applies the selected style to the selected area."
+                : "Click on the image to select an area, or use the Mask tool."}
             </p>
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
               {artStyles.map(style => (

@@ -440,11 +440,8 @@ const App: React.FC = () => {
       setError("Could not save your edit. Your browser might be in private mode or storage is full.");
       return;
     }
-
-    newHistory.push(newImageDataUrl);
-    setHistory(newHistory);
-    setHistoryIndex(newHistoryIndex);
-    // Reset transient states after an action
+    
+    // Reset transient states *before* updating history to prevent race conditions.
     setEditHotspot(null);
     setDisplayHotspot(null);
     setCrop(undefined);
@@ -456,6 +453,10 @@ const App: React.FC = () => {
     setMaskDataUrl(null);
     setRotation(0);
     resetViewTransform();
+
+    newHistory.push(newImageDataUrl);
+    setHistory(newHistory);
+    setHistoryIndex(newHistoryIndex);
   }, [history, historyIndex, resetViewTransform]);
 
   const handleImageUpload = useCallback(async (file: File) => {
