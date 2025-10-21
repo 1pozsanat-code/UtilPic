@@ -321,13 +321,13 @@ const App: React.FC = () => {
   const [detectedFaces, setDetectedFaces] = useState<Face[]>([]);
   const [selectedFaces, setSelectedFaces] = useState<Face[]>([]);
 
-  const isZoomPanEnabled = activeTab !== 'crop' && activeTab !== 'zoom' && !isSplitView;
+  const isZoomPanEnabled = activeTab !== 'crop' && !isSplitView;
 
   // FIX: Moved useMemo to the top level of the component to obey the Rules of Hooks.
   const cursorStyle = useMemo(() => {
     if (!isZoomPanEnabled) return 'default';
     if (viewTransform.scale > 1) return isPanning ? 'grabbing' : 'grab';
-    if ((activeTab === 'retouch' || activeTab === 'adjust') && !maskDataUrl && !activeColorPicker) return 'crosshair';
+    if ((activeTab === 'retouch' || activeTab === 'adjust' || activeTab === 'zoom') && !maskDataUrl && !activeColorPicker) return 'crosshair';
     if (activeColorPicker) return 'crosshair';
     return 'default';
   }, [isZoomPanEnabled, viewTransform.scale, isPanning, activeTab, maskDataUrl, activeColorPicker]);
@@ -393,9 +393,6 @@ const App: React.FC = () => {
     }
     if (activeTab !== 'adjust') {
         setActiveColorPicker(null);
-    }
-    if (activeTab === 'zoom') {
-        setAspect(undefined); // AI Zoom is always freeform
     }
     if (activeTab !== 'face') {
         setDetectedFaces([]);
@@ -1244,8 +1241,8 @@ const App: React.FC = () => {
   }, [currentImage, addImageToHistory]);
 
   const handleApplyZoom = useCallback(async (zoomLevel: number, detailIntensity: string) => {
-    if (!completedCrop || !imgRef.current) {
-        setError('Please select an area to zoom into.');
+    if (!editHotspot || !imgRef.current) {
+        setError('Please click on the image to select a center point for the zoom.');
         return;
     }
 
@@ -1255,20 +1252,18 @@ const App: React.FC = () => {
     try {
         const image = imgRef.current;
         const canvas = document.createElement('canvas');
-        const scaleX = image.naturalWidth / image.width;
-        const scaleY = image.naturalHeight / image.height;
-
-        // Apply zoom level to the completedCrop
-        const { x, y, width, height } = completedCrop;
-        const zoomedWidth = width / zoomLevel;
-        const zoomedHeight = height / zoomLevel;
-        const zoomedX = x + (width - zoomedWidth) / 2;
-        const zoomedY = y + (height - zoomedHeight) / 2;
+        const { naturalWidth, naturalHeight } = image;
         
-        const sourceCropWidth = Math.round(zoomedWidth * scaleX);
-        const sourceCropHeight = Math.round(zoomedHeight * scaleY);
-        const sourceCropX = Math.round(zoomedX * scaleX);
-        const sourceCropY = Math.round(zoomedY * scaleY);
+        // Calculate the source crop area based on the hotspot (center) and zoom level
+        const sourceCropWidth = Math.round(naturalWidth / zoomLevel);
+        const sourceCropHeight = Math.round(naturalHeight / zoomLevel);
+
+        // Center the crop on the hotspot, but ensure it stays within image bounds
+        let sourceCropX = Math.round(editHotspot.x - sourceCropWidth / 2);
+        let sourceCropY = Math.round(editHotspot.y - sourceCropHeight / 2);
+
+        sourceCropX = Math.max(0, Math.min(naturalWidth - sourceCropWidth, sourceCropX));
+        sourceCropY = Math.max(0, Math.min(naturalHeight - sourceCropHeight, sourceCropY));
 
         canvas.width = sourceCropWidth;
         canvas.height = sourceCropHeight;
@@ -1292,8 +1287,8 @@ const App: React.FC = () => {
 
         const croppedFile = new File([croppedBlob], 'zoom-source.png', { type: 'image/png' });
 
-        const targetWidth = image.naturalWidth;
-        const targetHeight = image.naturalHeight;
+        const targetWidth = naturalWidth;
+        const targetHeight = naturalHeight;
 
         const zoomedImageUrl = await generateZoomedImage(croppedFile, targetWidth, targetHeight, detailIntensity);
 
@@ -1306,7 +1301,7 @@ const App: React.FC = () => {
     } finally {
         setIsLoading(false);
     }
-  }, [completedCrop, addImageToHistory]);
+  }, [editHotspot, addImageToHistory]);
 
   const handleUndo = useCallback(() => {
     if (canUndo) {
@@ -1492,7 +1487,7 @@ const App: React.FC = () => {
     if (!coords) return;
 
     // Allow setting hotspot in both 'retouch' and 'adjust' tabs if not in a sub-mode like color picking or masking.
-    if ((activeTab === 'retouch' || activeTab === 'adjust') && !maskDataUrl && !activeColorPicker) {
+    if ((activeTab === 'retouch' || activeTab === 'adjust' || activeTab === 'zoom') && !maskDataUrl && !activeColorPicker) {
         setDisplayHotspot(coords.display);
         setEditHotspot(coords.edit);
         return;
@@ -1629,7 +1624,7 @@ const App: React.FC = () => {
     let zoomCenterX = e.clientX;
     let zoomCenterY = e.clientY;
 
-    if (activeTab === 'retouch' && displayHotspot) {
+    if ((activeTab === 'retouch' || activeTab === 'zoom') && displayHotspot) {
         zoomCenterX = displayHotspot.x + rect.left;
         zoomCenterY = displayHotspot.y + rect.top;
     }
@@ -1905,7 +1900,7 @@ const App: React.FC = () => {
                 )}
             </div>
         )}
-        {!isSplitView && displayHotspot && !isLoading && (activeTab === 'retouch' || activeTab === 'adjust') && !maskDataUrl && (
+        {!isSplitView && displayHotspot && !isLoading && (activeTab === 'retouch' || activeTab === 'adjust' || activeTab === 'zoom') && !maskDataUrl && (
             <div 
                 className="absolute -translate-x-1/2 -translate-y-1/2 z-10 animate-hotspot-appear"
                 style={{ 
@@ -1979,7 +1974,7 @@ const App: React.FC = () => {
                   className="w-full max-h-[50vh] lg:max-h-[60vh] flex items-center justify-center" 
                   style={{ aspectRatio: imageAspectRatio ?? '1 / 1' }}
                 >
-                    {activeTab === 'crop' || activeTab === 'zoom' ? (
+                    {activeTab === 'crop' ? (
                         <ReactCrop 
                             crop={crop} 
                             onChange={c => setCrop(c)} 
@@ -2155,8 +2150,8 @@ const App: React.FC = () => {
                 <ZoomPanel
                     onApplyZoom={handleApplyZoom}
                     isLoading={isLoading}
-                    isZooming={!!completedCrop?.width && completedCrop.width > 0}
-                    completedCrop={completedCrop}
+                    isAreaSelected={!!editHotspot}
+                    editHotspot={editHotspot}
                     imageRef={imgRef}
                 />
                 </div>

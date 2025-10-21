@@ -4,54 +4,53 @@
 */
 
 import React, { useState, useEffect } from 'react';
-import { type PixelCrop } from 'react-image-crop';
 
 type DetailIntensity = 'Subtle' | 'Natural' | 'High';
 
 interface ZoomPanelProps {
   onApplyZoom: (zoomLevel: number, detailIntensity: DetailIntensity) => void;
   isLoading: boolean;
-  isZooming: boolean; // From completedCrop, enables Apply button
-  completedCrop: PixelCrop | undefined;
+  isAreaSelected: boolean;
+  editHotspot: { x: number; y: number } | null;
   imageRef: React.RefObject<HTMLImageElement>;
 }
 
-const ZoomPanel: React.FC<ZoomPanelProps> = ({ onApplyZoom, isLoading, isZooming, completedCrop, imageRef }) => {
+const ZoomPanel: React.FC<ZoomPanelProps> = ({ onApplyZoom, isLoading, isAreaSelected, editHotspot, imageRef }) => {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [zoomLevel, setZoomLevel] = useState(1);
+  const [zoomLevel, setZoomLevel] = useState(2);
   const [detailIntensity, setDetailIntensity] = useState<DetailIntensity>('Natural');
-  const [aspectRatio, setAspectRatio] = useState('1 / 1');
+  const [imageAspectRatio, setImageAspectRatio] = useState('1 / 1');
 
-  // Reset controls when the crop selection changes
+  // Reset controls if hotspot is cleared (e.g., by undoing)
   useEffect(() => {
-    setZoomLevel(1);
-    setDetailIntensity('Natural');
-  }, [completedCrop]);
+    if (!isAreaSelected) {
+        setZoomLevel(2);
+        setPreviewUrl(null);
+    }
+  }, [isAreaSelected]);
 
-  // Update preview when crop or zoom level changes
+  // Update preview when hotspot or zoom level changes
   useEffect(() => {
-    if (!completedCrop || !imageRef.current || !completedCrop.width || !completedCrop.height) {
+    if (!editHotspot || !imageRef.current || !imageRef.current.naturalWidth) {
         setPreviewUrl(null);
         return;
     }
 
     const image = imageRef.current;
     const canvas = document.createElement('canvas');
-    const scaleX = image.naturalWidth / image.width;
-    const scaleY = image.naturalHeight / image.height;
+    const { naturalWidth, naturalHeight } = image;
 
-    // Apply zoom level to the completedCrop to calculate the new source area
-    const { x, y, width, height } = completedCrop;
-    const zoomedWidth = width / zoomLevel;
-    const zoomedHeight = height / zoomLevel;
-    const zoomedX = x + (width - zoomedWidth) / 2;
-    const zoomedY = y + (height - zoomedHeight) / 2;
+    // Calculate the source crop area based on the hotspot (center) and zoom level
+    const sourceCropWidth = Math.round(naturalWidth / zoomLevel);
+    const sourceCropHeight = Math.round(naturalHeight / zoomLevel);
 
-    const sourceCropWidth = zoomedWidth * scaleX;
-    const sourceCropHeight = zoomedHeight * scaleY;
-    const sourceCropX = zoomedX * scaleX;
-    const sourceCropY = zoomedY * scaleY;
+    // Center the crop on the hotspot, but ensure it stays within image bounds
+    let sourceCropX = Math.round(editHotspot.x - sourceCropWidth / 2);
+    let sourceCropY = Math.round(editHotspot.y - sourceCropHeight / 2);
 
+    sourceCropX = Math.max(0, Math.min(naturalWidth - sourceCropWidth, sourceCropX));
+    sourceCropY = Math.max(0, Math.min(naturalHeight - sourceCropHeight, sourceCropY));
+    
     canvas.width = sourceCropWidth;
     canvas.height = sourceCropHeight;
     const ctx = canvas.getContext('2d');
@@ -74,11 +73,9 @@ const ZoomPanel: React.FC<ZoomPanelProps> = ({ onApplyZoom, isLoading, isZooming
     );
 
     setPreviewUrl(canvas.toDataURL('image/png'));
-    setAspectRatio(`${zoomedWidth} / ${zoomedHeight}`);
+    setImageAspectRatio(`${naturalWidth} / ${naturalHeight}`);
 
-  }, [completedCrop, imageRef, zoomLevel]);
-
-  const showPreview = !!completedCrop?.width && !!previewUrl;
+  }, [editHotspot, imageRef, zoomLevel]);
 
   const detailLevels: { name: DetailIntensity, description: string }[] = [
     { name: 'Subtle', description: 'Preserves original texture with minimal added detail.' },
@@ -91,22 +88,24 @@ const ZoomPanel: React.FC<ZoomPanelProps> = ({ onApplyZoom, isLoading, isZooming
       <div className="text-center">
         <h3 className="text-xl font-bold text-gray-200">AI Zoom & Enhance</h3>
         <p className="text-base text-gray-400 max-w-md mt-1">
-          Select an area on the image, then fine-tune the zoom and detail level.
+          Click a point on the image to set the zoom center, then adjust the zoom level.
         </p>
       </div>
       
-      {showPreview ? (
+      {isAreaSelected ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full animate-fade-in">
           {/* Preview */}
           <div className="flex flex-col items-center gap-2">
-            <p className="text-sm font-medium text-gray-400">Preview</p>
+            <p className="text-sm font-medium text-gray-400">Preview of Zoomed Area</p>
             <div className="w-full max-w-xs p-1 bg-black/20 rounded-lg border border-gray-600">
-                <img 
-                    src={previewUrl} 
-                    alt="Zoom preview" 
-                    className="w-full h-auto object-contain rounded" 
-                    style={{ aspectRatio: aspectRatio }}
-                />
+                {previewUrl ? (
+                    <img 
+                        src={previewUrl} 
+                        alt="Zoom preview" 
+                        className="w-full h-auto object-contain rounded" 
+                        style={{ aspectRatio: imageAspectRatio }}
+                    />
+                ) : <div className="w-full bg-gray-900 rounded" style={{ aspectRatio: imageAspectRatio }} />}
             </div>
           </div>
           {/* Controls */}
@@ -118,7 +117,7 @@ const ZoomPanel: React.FC<ZoomPanelProps> = ({ onApplyZoom, isLoading, isZooming
               </div>
               <input
                   id="zoom-level"
-                  type="range" min="1" max="3" step="0.1"
+                  type="range" min="1.1" max="4" step="0.1"
                   value={zoomLevel}
                   onChange={(e) => setZoomLevel(Number(e.target.value))}
                   disabled={isLoading}
@@ -154,13 +153,13 @@ const ZoomPanel: React.FC<ZoomPanelProps> = ({ onApplyZoom, isLoading, isZooming
         </div>
       ) : (
          <div className="text-center py-8">
-            <p className="text-base text-gray-400">Click and drag on the image to select an area to zoom.</p>
+            <p className="text-base text-gray-400">Please click a point on the image to begin.</p>
         </div>
       )}
       
       <button
         onClick={() => onApplyZoom(zoomLevel, detailIntensity)}
-        disabled={isLoading || !isZooming}
+        disabled={isLoading || !isAreaSelected}
         className="w-full max-w-sm mt-2 bg-gradient-to-br from-green-600 to-green-500 text-white font-bold py-4 px-6 rounded-lg transition-all duration-300 ease-in-out shadow-lg shadow-green-500/20 hover:shadow-xl hover:shadow-green-500/40 hover:-translate-y-px active:scale-95 active:shadow-inner text-lg disabled:from-green-800 disabled:to-green-700 disabled:shadow-none disabled:cursor-not-allowed disabled:transform-none"
       >
         Apply AI Zoom
