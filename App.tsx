@@ -706,7 +706,7 @@ const App: React.FC = () => {
   }, [currentImage, addImageToHistory]);
 
   const handleApplyUpscale = useCallback(async (scale: number, detailIntensity: string) => {
-    if (!currentImage) {
+    if (!currentImage || !imgRef.current) {
         setError('No image loaded to upscale.');
         return;
     }
@@ -715,7 +715,8 @@ const App: React.FC = () => {
     setError(null);
 
     try {
-        const upscaledImageUrl = await generateUpscaledImage(currentImage, scale, detailIntensity);
+        const { naturalWidth, naturalHeight } = imgRef.current;
+        const upscaledImageUrl = await generateUpscaledImage(currentImage, scale, detailIntensity, naturalWidth, naturalHeight);
         await addImageToHistory(upscaledImageUrl);
     } catch (err) {
         const errorMessage = getErrorMessage(err);

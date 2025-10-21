@@ -622,12 +622,16 @@ export const generateRetouchedFace = async (
  * @param originalImage The original image file.
  * @param scale The factor to upscale by (e.g., 2 for 2x).
  * @param detailIntensity The desired level of detail enhancement.
+ * @param originalWidth The natural width of the original image.
+ * @param originalHeight The natural height of the original image.
  * @returns A promise that resolves to the data URL of the upscaled image.
  */
 export const generateUpscaledImage = async (
     originalImage: File,
     scale: number,
     detailIntensity: string,
+    originalWidth: number,
+    originalHeight: number,
 ): Promise<string> => {
     console.log(`Starting upscale generation: ${scale}x with ${detailIntensity} detail.`);
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
@@ -647,11 +651,14 @@ export const generateUpscaledImage = async (
             detailInstruction = 'When reconstructing details, add a natural amount of new detail, balancing enhancement with the original character of the image. The result should look realistic and not over-sharpened.';
             break;
     }
+
+    const targetWidth = Math.round(originalWidth * scale);
+    const targetHeight = Math.round(originalHeight * scale);
     
-    const prompt = `You are an expert in AI image processing specializing in high-quality upscaling. Your task is to upscale the provided image by a factor of ${scale}x, paying close attention to the requested detail intensity.
+    const prompt = `You are an expert in AI image processing specializing in high-quality upscaling. Your task is to upscale the provided image to a target resolution of exactly ${targetWidth} by ${targetHeight} pixels, paying close attention to the requested detail intensity.
 
 Upscaling Guidelines:
-- Increase the resolution of the image by ${scale} times its original dimensions.
+- Increase the resolution of the image to the target dimensions: ${targetWidth}x${targetHeight}.
 - ${detailInstruction}
 - Reduce any existing noise or compression artifacts where possible.
 - The final result must be a photorealistic, high-resolution version of the original image, free of AI-generated artifacts.
@@ -659,7 +666,7 @@ Upscaling Guidelines:
 Output: Return ONLY the final upscaled image. Do not return text.`;
     const textPart = { text: prompt };
 
-    console.log(`Sending image and ${scale}x upscale prompt to the model...`);
+    console.log(`Sending image and ${scale}x upscale prompt to the model (target: ${targetWidth}x${targetHeight})...`);
     // FIX: Moved safetySettings into the config object.
     const response: GenerateContentResponse = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
