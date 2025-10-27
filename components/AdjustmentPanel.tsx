@@ -522,7 +522,7 @@ const AdjustmentPanel: React.FC<AdjustmentPanelProps> = ({ onApplyAdjustment, on
               {artStyles.map(style => (
                 <button
                   key={style}
-                  onClick={() => onApplyLocalAdjustment(`Apply the '${style}' art style ONLY to the selected area. The rest of the image MUST remain untouched. Blend the edges of the styled area seamlessly into the original image.`)}
+                  onClick={() => onApplyLocalAdjustment(`Intelligently identify the object (e.g., an item of clothing, a specific background element) located at the selected point. Apply the '${style}' art style ONLY to that entire object. The rest of the image MUST remain untouched. Blend the edges of the styled area seamlessly into the original image for a natural look.`)}
                   disabled={isLoading || !isAreaSelected}
                   className="text-center bg-white/5 text-gray-300 font-medium py-2 px-2 rounded-md transition-all hover:bg-white/10 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed text-xs"
                   title={`Apply ${style} style`}
