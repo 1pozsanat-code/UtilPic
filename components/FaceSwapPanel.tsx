@@ -53,6 +53,7 @@ const FaceSwapPanel: React.FC<FaceSwapPanelProps> = ({ onApplyFaceSwap, isLoadin
   const [isDetectingSource, setIsDetectingSource] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Detect faces in the main (target) image when the panel is opened
   useEffect(() => {
@@ -96,6 +97,17 @@ const FaceSwapPanel: React.FC<FaceSwapPanelProps> = ({ onApplyFaceSwap, isLoadin
         .finally(() => setIsDetectingSource(false));
     }
   }, []);
+
+  const handleReset = () => {
+    setSourceImage(null);
+    setSourceFaces([]);
+    setSelectedSourceFaceId(null);
+    setSelectedTargetFaceId(null);
+    if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+    }
+    setError(null);
+  };
 
   const handleApply = () => {
     if (!sourceImage || selectedTargetFaceId === null || selectedSourceFaceId === null) return;
@@ -155,17 +167,26 @@ const FaceSwapPanel: React.FC<FaceSwapPanelProps> = ({ onApplyFaceSwap, isLoadin
           ) : (
             <FaceSelector title="" faces={sourceFaces} selectedId={selectedSourceFaceId} onSelect={setSelectedSourceFaceId} isLoading={isDetectingSource} numFaces={sourceFaces.length} />
           )}
-           <input id="source-image-upload" type="file" className="hidden" accept="image/*" onChange={handleSourceImageUpload} />
+           <input id="source-image-upload" type="file" className="hidden" accept="image/*" onChange={handleSourceImageUpload} ref={fileInputRef} />
         </div>
       </div>
 
-      <button
-        onClick={handleApply}
-        disabled={isLoading || selectedTargetFaceId === null || selectedSourceFaceId === null}
-        className="w-full max-w-sm mx-auto mt-2 bg-gradient-to-br from-blue-600 to-blue-500 text-white font-bold py-4 px-6 rounded-lg transition-all duration-300 ease-in-out shadow-lg shadow-blue-500/20 hover:shadow-xl hover:shadow-blue-500/40 hover:-translate-y-px active:scale-95 active:shadow-inner text-lg disabled:from-blue-800 disabled:to-blue-700 disabled:shadow-none disabled:cursor-not-allowed disabled:transform-none"
-      >
-        Apply Face Swap
-      </button>
+      <div className="w-full max-w-lg mx-auto mt-2 flex flex-col sm:flex-row gap-4">
+        <button
+            onClick={handleReset}
+            disabled={isLoading || !sourceImage}
+            className="w-full bg-white/10 border border-white/20 text-gray-200 font-semibold py-3 px-6 rounded-lg transition-all duration-200 ease-in-out hover:bg-white/20 hover:border-white/30 active:scale-95 text-base disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+            Reset
+        </button>
+        <button
+            onClick={handleApply}
+            disabled={isLoading || selectedTargetFaceId === null || selectedSourceFaceId === null}
+            className="w-full bg-gradient-to-br from-blue-600 to-blue-500 text-white font-bold py-3 px-6 rounded-lg transition-all duration-300 ease-in-out shadow-lg shadow-blue-500/20 hover:shadow-xl hover:shadow-blue-500/40 hover:-translate-y-px active:scale-95 active:shadow-inner text-lg disabled:from-blue-800 disabled:to-blue-700 disabled:shadow-none disabled:cursor-not-allowed disabled:transform-none"
+        >
+            Apply Face Swap
+        </button>
+      </div>
     </div>
   );
 };
