@@ -6,7 +6,7 @@
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import ReactCrop, { type Crop, type PixelCrop } from 'react-image-crop';
-import { generateEditedImage, generateFilteredImage, generateAdjustedImage, generateUpscaledImage, generateRetouchedFace, generateRestoredImage, generateRemovedBackground, generateBackgroundImage, generateZoomedImage, analyzeImageForSuggestions, SuggestionAnalysis, generateColorGradedImage, generateSharpenedImage, generateCorrectedOrientation, generateGrainImage, generateRotatedImage, type Face } from './services/geminiService.ts';
+import { generateEditedImage, generateFilteredImage, generateAdjustedImage, generateUpscaledImage, generateRetouchedFace, generateRestoredImage, generateRemovedBackground, generateBackgroundImage, generateZoomedImage, analyzeImageForSuggestions, SuggestionAnalysis, generateColorGradedImage, generateSharpenedImage, generateCorrectedOrientation, generateGrainImage, generateRotatedImage, generateFaceSwap, type Face } from './services/geminiService.ts';
 import { saveImageToHistoryDB, getAllHistoryImagesDB, clearHistoryDB, removeImagesFromHistoryDB } from './services/sessionDb.ts';
 import Header from './components/Header.tsx';
 import Spinner from './components/Spinner.tsx';
@@ -15,12 +15,13 @@ import AdjustmentPanel, { type ColorPickerType } from './components/AdjustmentPa
 import CropPanel from './components/CropPanel.tsx';
 import UpscalePanel from './components/UpscalePanel.tsx';
 import FaceRetouchPanel from './components/FaceRetouchPanel.tsx';
+import FaceSwapPanel from './components/FaceSwapPanel.tsx';
 import RestorePanel from './components/RestorePanel.tsx';
 import WatermarkPanel, { type WatermarkSettings } from './components/WatermarkPanel.tsx';
 import BackgroundPanel, { type BackgroundSettings } from './components/BackgroundPanel.tsx';
 import OverlayPanel, { type OverlayLayer } from './components/OverlayPanel.tsx';
 import ZoomPanel from './components/ZoomPanel.tsx';
-import { UndoIcon, RedoIcon, EyeIcon, HistoryIcon, UserCircleIcon, PhotoIcon, SparklesIcon, SunIcon, EyeDropperIcon, ArrowUpOnSquareIcon, BullseyeIcon, PaletteIcon, MagicWandIcon, CropIcon, LayersIcon, MagnifyingGlassPlusIcon, WatermarkIcon, TuneIcon, MaskIcon, DocumentDuplicateIcon, SplitScreenIcon } from './components/icons.tsx';
+import { UndoIcon, RedoIcon, EyeIcon, HistoryIcon, UserCircleIcon, PhotoIcon, SparklesIcon, SunIcon, EyeDropperIcon, ArrowUpOnSquareIcon, BullseyeIcon, PaletteIcon, MagicWandIcon, CropIcon, LayersIcon, MagnifyingGlassPlusIcon, WatermarkIcon, TuneIcon, MaskIcon, DocumentDuplicateIcon, SplitScreenIcon, FaceSwapIcon } from './components/icons.tsx';
 import StartScreen from './components/StartScreen.tsx';
 import RestoreSessionModal from './components/RestoreSessionModal.tsx';
 import DownloadModal, { type DownloadSettings } from './components/DownloadModal.tsx';
@@ -104,7 +105,7 @@ const createBlackAndWhiteMask = (redOverlayUrl: string, width: number, height: n
 };
 
 
-export type Tab = 'retouch' | 'face' | 'adjust' | 'filters' | 'colorGrade' | 'crop' | 'background' | 'overlay' | 'upscale' | 'zoom' | 'restore' | 'watermark' | 'mask';
+export type Tab = 'retouch' | 'face' | 'faceSwap' | 'adjust' | 'filters' | 'colorGrade' | 'crop' | 'background' | 'overlay' | 'upscale' | 'zoom' | 'restore' | 'watermark' | 'mask';
 
 export type Suggestion = {
   id: string;
@@ -222,6 +223,7 @@ const tools = [
   { id: 'retouch', label: 'Retouch', icon: MagicWandIcon },
   { id: 'mask', label: 'Mask', icon: MaskIcon },
   { id: 'face', label: 'Face', icon: UserCircleIcon },
+  { id: 'faceSwap', label: 'Face Swap', icon: FaceSwapIcon },
   { id: 'adjust', label: 'Adjust', icon: SunIcon },
   { id: 'filters', label: 'Filters', icon: PaletteIcon },
   { id: 'colorGrade', label: 'Color Grade', icon: TuneIcon },
@@ -697,6 +699,27 @@ const App: React.FC = () => {
         const errorMessage = getErrorMessage(err);
         setError(`Failed to apply face retouch. ${errorMessage}`);
         console.error("Caught error in handleApplyFaceRetouch:", err);
+    } finally {
+        setIsLoading(false);
+    }
+  }, [currentImage, addImageToHistory]);
+
+  const handleApplyFaceSwap = useCallback(async (sourceImage: File, targetFace: Face, sourceFace: Face) => {
+    if (!currentImage) {
+      setError('No target image loaded to apply face swap to.');
+      return;
+    }
+    
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+        const swappedImageUrl = await generateFaceSwap(currentImage, sourceImage, targetFace, sourceFace);
+        await addImageToHistory(swappedImageUrl);
+    } catch (err) {
+        const errorMessage = getErrorMessage(err);
+        setError(`Failed to apply face swap. ${errorMessage}`);
+        console.error("Caught error in handleApplyFaceSwap:", err);
     } finally {
         setIsLoading(false);
     }
@@ -2078,6 +2101,15 @@ const App: React.FC = () => {
                     onFacesDetected={setDetectedFaces}
                     onFaceSelectionChange={setSelectedFaces}
                 />
+                </div>
+
+                {/* Face Swap Panel */}
+                <div className={`col-start-1 row-start-1 transition-all duration-300 ease-out ${activeTab === 'faceSwap' ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-5 scale-[0.97] pointer-events-none'}`}>
+                    <FaceSwapPanel 
+                        onApplyFaceSwap={handleApplyFaceSwap} 
+                        isLoading={isLoading}
+                        targetImage={currentImage}
+                    />
                 </div>
 
                 {/* Crop Panel */}

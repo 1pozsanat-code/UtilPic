@@ -618,6 +618,62 @@ export const generateRetouchedFace = async (
 };
 
 /**
+ * Swaps a face from a source image onto a target image.
+ * @param targetImage The image where the face will be placed.
+ * @param sourceImage The image from which to take the face.
+ * @param targetFace The bounding box of the face to be replaced in the target image.
+ * @param sourceFace The bounding box of the face to use from the source image.
+ * @returns A promise that resolves to the data URL of the edited image.
+ */
+export const generateFaceSwap = async (
+    targetImage: File,
+    sourceImage: File,
+    targetFace: Face,
+    sourceFace: Face,
+): Promise<string> => {
+    console.log(`Starting face swap...`);
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+
+    const targetImagePart = await fileToPart(targetImage);
+    const sourceImagePart = await fileToPart(sourceImage);
+
+    const prompt = `You are an expert digital artist specializing in photorealistic face swapping. You will be provided with a 'Target Image' and a 'Source Image'. Your task is to take the face from the specified bounding box in the 'Source Image' and seamlessly place it onto the specified bounding box in the 'Target Image'.
+
+- Source Image Face Bounding Box (normalized): {x: ${sourceFace.box.x.toFixed(4)}, y: ${sourceFace.box.y.toFixed(4)}, width: ${sourceFace.box.width.toFixed(4)}, height: ${sourceFace.box.height.toFixed(4)}}
+- Target Image Face Bounding Box (to be replaced): {x: ${targetFace.box.x.toFixed(4)}, y: ${targetFace.box.y.toFixed(4)}, width: ${targetFace.box.width.toFixed(4)}, height: ${targetFace.box.height.toFixed(4)}}
+
+CRITICAL INSTRUCTIONS:
+1.  **Preserve Target Scene:** The final image must retain the lighting, skin tone, color grading, and overall atmosphere of the 'Target Image'. The swapped face must look like it naturally belongs in the target scene.
+2.  **Adapt Pose and Expression:** Do not simply paste the source face. You must intelligently adapt the source face to match the head pose, angle, and general expression of the face in the 'Target Image'.
+3.  **Seamless Blending:** The edges of the swapped face must be perfectly blended with the surrounding skin in the 'Target Image'. There should be no visible seams.
+4.  **Maintain Identity:** The identity of the swapped face must be clearly that of the person in the 'Source Image'.
+5.  **Preserve Target Body/Background:** The rest of the 'Target Image' (hair, body, clothing, background) must remain absolutely unchanged.
+
+Safety & Ethics Policy: This tool is for creative and professional photo editing. Do not use it to create misleading or harmful content. Ensure the final result does not fundamentally alter the perceived race or ethnicity in a deceptive way.
+
+Output: Return ONLY the final edited image. Do not return text.`;
+
+    const parts = [
+        { text: "Target Image:" },
+        targetImagePart,
+        { text: "Source Image:" },
+        sourceImagePart,
+        { text: prompt },
+    ];
+    
+    const response: GenerateContentResponse = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        contents: { parts: parts },
+        config: {
+            safetySettings: safetySettings,
+        },
+    });
+
+    console.log('Received response from model for face swap.', response);
+    return handleApiResponse(response, 'face swap');
+};
+
+/**
  * Generates an upscaled image using generative AI.
  * @param originalImage The original image file.
  * @param scale The factor to upscale by (e.g., 2 for 2x).
