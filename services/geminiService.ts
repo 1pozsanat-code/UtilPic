@@ -634,48 +634,43 @@ export const generateFaceSwap = async (
     console.log(`Starting face swap...`);
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
 
-    // Get target image dimensions to enforce consistent output size
-    const { width: targetWidth, height: targetHeight } = await new Promise<{width: number, height: number}>((resolve, reject) => {
-        const img = new Image();
-        const url = URL.createObjectURL(targetImage);
-        img.onload = () => {
-            resolve({ width: img.naturalWidth, height: img.naturalHeight });
-            URL.revokeObjectURL(url);
-        };
-        img.onerror = (err) => {
-            reject(err);
-            URL.revokeObjectURL(url);
-        };
-        img.src = url;
-    });
-
     const targetImagePart = await fileToPart(targetImage);
     const sourceImagePart = await fileToPart(sourceImage);
 
-    const prompt = `You are an expert digital artist specializing in photorealistic face swapping. You will be provided with a 'Target Image' and a 'Source Image'. Your task is to take the face from the specified bounding box in the 'Source Image' and seamlessly place it onto the specified bounding box in the 'Target Image'.
+    // Get target image dimensions
+    const { width: targetWidth, height: targetHeight } = await new Promise<{width: number, height: number}>((resolve, reject) => {
+        const img = new Image();
+        const url = URL.createObjectURL(targetImage);
+        img.onload = () => { resolve({ width: img.naturalWidth, height: img.naturalHeight }); URL.revokeObjectURL(url); };
+        img.onerror = (err) => { reject(err); URL.revokeObjectURL(url); };
+        img.src = url;
+    });
 
-- Source Image Face Bounding Box (normalized): {x: ${sourceFace.box.x.toFixed(4)}, y: ${sourceFace.box.y.toFixed(4)}, width: ${sourceFace.box.width.toFixed(4)}, height: ${sourceFace.box.height.toFixed(4)}}
-- Target Image Face Bounding Box (to be replaced): {x: ${targetFace.box.x.toFixed(4)}, y: ${targetFace.box.y.toFixed(4)}, width: ${targetFace.box.width.toFixed(4)}, height: ${targetFace.box.height.toFixed(4)}}
+    const prompt = `You are an expert digital artist specializing in photorealistic face swapping. 
+    
+Your task is to take the face from the 'Source Image' and seamlessly place it onto the 'Target Image'.
+
+- The face to take from the 'Source Image' is within this bounding box (normalized): {x: ${sourceFace.box.x.toFixed(4)}, y: ${sourceFace.box.y.toFixed(4)}, width: ${sourceFace.box.width.toFixed(4)}, height: ${sourceFace.box.height.toFixed(4)}}
+- The face to replace in the 'Target Image' is within this bounding box (normalized): {x: ${targetFace.box.x.toFixed(4)}, y: ${targetFace.box.y.toFixed(4)}, width: ${targetFace.box.width.toFixed(4)}, height: ${targetFace.box.height.toFixed(4)}}
 
 CRITICAL INSTRUCTIONS:
-1.  **Preserve Target Scene:** The final image must retain the lighting, skin tone, color grading, and overall atmosphere of the 'Target Image'. The swapped face must look like it naturally belongs in the target scene.
-2.  **Precise Pose and Perspective Matching:** This is the most crucial step. You must not simply paste the source face. You must meticulously reconstruct the source face to perfectly match the 3D head position, rotation (tilt, yaw, pitch), and perspective of the original face in the 'Target Image'. The swapped face must look as if it were photographed in that exact position and orientation.
-3.  **Natural Expression Blending:** Subtly blend the expression of the source face with the general mood of the target face if it helps create a more natural result. For example, a neutral expression from the source should be adapted to a slight smile if the target face is smiling.
-4.  **Seamless Blending:** The edges of the swapped face must be perfectly blended with the surrounding skin in the 'Target Image'. There should be no visible seams.
-5.  **Maintain Identity:** The identity of the swapped face must be clearly that of the person in the 'Source Image'.
-6.  **Preserve Target Body/Background:** The rest of the 'Target Image' (hair, body, clothing, background) must remain absolutely unchanged.
-7.  **Preserve Dimensions:** The output image MUST have the exact same dimensions as the original 'Target Image': ${targetWidth} pixels wide by ${targetHeight} pixels tall. Do not crop or change the aspect ratio.
+1.  **Match Scene:** The swapped face MUST match the lighting, skin tone, color grading, and atmosphere of the 'Target Image'.
+2.  **Match Pose & Perspective:** Reconstruct the source face to perfectly match the 3D head position, rotation, and perspective of the original face in the 'Target Image'.
+3.  **Blend Seamlessly:** Edges must be perfectly blended with no visible seams.
+4.  **Maintain Identity:** The identity of the swapped face must be from the 'Source Image'.
+5.  **Preserve Background & Body:** The rest of the 'Target Image' (hair, body, clothing, background) must remain absolutely unchanged.
+6.  **Preserve Dimensions:** The output image MUST have the exact same dimensions as the original 'Target Image': ${targetWidth}x${targetHeight}. Do not crop or change the aspect ratio.
 
-Safety & Ethics Policy: This tool is for creative and professional photo editing. Do not use it to create misleading or harmful content. Ensure the final result does not fundamentally alter the perceived race or ethnicity in a deceptive way.
+Safety & Ethics Policy: This tool is for creative editing. Do not use it to create misleading content. Do not alter perceived race or ethnicity.
 
-Output: Return ONLY the final edited image with the exact dimensions of ${targetWidth}x${targetHeight}. Do not return text.`;
+Output: Return ONLY the final edited image. Do not return text.`;
 
     const parts = [
-        { text: "Target Image:" },
-        targetImagePart,
-        { text: "Source Image:" },
-        sourceImagePart,
         { text: prompt },
+        { text: "\n\nSource Image (the face to use):" },
+        sourceImagePart,
+        { text: "\n\nTarget Image (the scene to place the face into):" },
+        targetImagePart,
     ];
     
     const response: GenerateContentResponse = await ai.models.generateContent({
