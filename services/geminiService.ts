@@ -634,6 +634,21 @@ export const generateFaceSwap = async (
     console.log(`Starting face swap...`);
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
 
+    // Get target image dimensions to enforce consistent output size
+    const { width: targetWidth, height: targetHeight } = await new Promise<{width: number, height: number}>((resolve, reject) => {
+        const img = new Image();
+        const url = URL.createObjectURL(targetImage);
+        img.onload = () => {
+            resolve({ width: img.naturalWidth, height: img.naturalHeight });
+            URL.revokeObjectURL(url);
+        };
+        img.onerror = (err) => {
+            reject(err);
+            URL.revokeObjectURL(url);
+        };
+        img.src = url;
+    });
+
     const targetImagePart = await fileToPart(targetImage);
     const sourceImagePart = await fileToPart(sourceImage);
 
@@ -644,14 +659,16 @@ export const generateFaceSwap = async (
 
 CRITICAL INSTRUCTIONS:
 1.  **Preserve Target Scene:** The final image must retain the lighting, skin tone, color grading, and overall atmosphere of the 'Target Image'. The swapped face must look like it naturally belongs in the target scene.
-2.  **Adapt Pose and Expression:** Do not simply paste the source face. You must intelligently adapt the source face to match the head pose, angle, and general expression of the face in the 'Target Image'.
-3.  **Seamless Blending:** The edges of the swapped face must be perfectly blended with the surrounding skin in the 'Target Image'. There should be no visible seams.
-4.  **Maintain Identity:** The identity of the swapped face must be clearly that of the person in the 'Source Image'.
-5.  **Preserve Target Body/Background:** The rest of the 'Target Image' (hair, body, clothing, background) must remain absolutely unchanged.
+2.  **Precise Pose and Perspective Matching:** This is the most crucial step. You must not simply paste the source face. You must meticulously reconstruct the source face to perfectly match the 3D head position, rotation (tilt, yaw, pitch), and perspective of the original face in the 'Target Image'. The swapped face must look as if it were photographed in that exact position and orientation.
+3.  **Natural Expression Blending:** Subtly blend the expression of the source face with the general mood of the target face if it helps create a more natural result. For example, a neutral expression from the source should be adapted to a slight smile if the target face is smiling.
+4.  **Seamless Blending:** The edges of the swapped face must be perfectly blended with the surrounding skin in the 'Target Image'. There should be no visible seams.
+5.  **Maintain Identity:** The identity of the swapped face must be clearly that of the person in the 'Source Image'.
+6.  **Preserve Target Body/Background:** The rest of the 'Target Image' (hair, body, clothing, background) must remain absolutely unchanged.
+7.  **Preserve Dimensions:** The output image MUST have the exact same dimensions as the original 'Target Image': ${targetWidth} pixels wide by ${targetHeight} pixels tall. Do not crop or change the aspect ratio.
 
 Safety & Ethics Policy: This tool is for creative and professional photo editing. Do not use it to create misleading or harmful content. Ensure the final result does not fundamentally alter the perceived race or ethnicity in a deceptive way.
 
-Output: Return ONLY the final edited image. Do not return text.`;
+Output: Return ONLY the final edited image with the exact dimensions of ${targetWidth}x${targetHeight}. Do not return text.`;
 
     const parts = [
         { text: "Target Image:" },
