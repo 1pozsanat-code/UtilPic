@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { detectFaces, type Face } from '../services/geminiService.ts';
-import { CheckIcon } from './icons.tsx';
+import { CheckIcon, SparklesIcon } from './icons.tsx';
 import Spinner from './Spinner.tsx';
 
 interface FaceRetouchPanelProps {
@@ -100,6 +100,35 @@ const FaceRetouchPanel: React.FC<FaceRetouchPanelProps> = ({ onApplyRetouch, isL
     }
   }, [currentImage, isLoadingFaces, onFacesDetected, onFaceSelectionChange]);
 
+  const handleNaturalPortraitPreset = useCallback(async () => {
+    if (!currentImage || isLoading || isLoadingFaces) return;
+
+    setIsLoadingFaces(true);
+    detectionTriggered.current = true; // Set this to true so the panel switches to the "face selection" view, which also handles the "no faces found" message.
+    try {
+        const faces = await detectFaces(currentImage);
+        
+        if (faces.length > 0) {
+            // Immediately apply the retouch. The App component will show the main loader.
+            onApplyRetouch({
+                skinSmoothing: 30,      // Subtle
+                eyeBrightening: 50,     // Moderate
+                selectedFaces: faces,   // Apply to all detected faces
+            });
+        } else {
+            // No faces found, update the panel to show the message.
+            setDetectedFaces([]);
+            onFacesDetected([]);
+            onFaceSelectionChange([]);
+        }
+    } catch (error) {
+        console.error("Preset face detection failed", error);
+    } finally {
+        setIsLoadingFaces(false);
+    }
+  }, [currentImage, isLoading, isLoadingFaces, onApplyRetouch, onFacesDetected, onFaceSelectionChange]);
+
+
   const toggleFaceSelection = (faceId: number) => {
     const newSelection = new Set(selectedFaceIds);
     if (newSelection.has(faceId)) {
@@ -169,12 +198,30 @@ const FaceRetouchPanel: React.FC<FaceRetouchPanelProps> = ({ onApplyRetouch, isL
     <div className="w-full bg-gray-800/50 border border-gray-700 rounded-lg p-6 flex flex-col gap-6 animate-fade-in backdrop-blur-sm">
       <div className="text-center">
         <h3 className="text-xl font-bold text-gray-200">AI Face Retouch</h3>
-        <p className="text-base text-gray-400 mt-1">Fine-tune enhancements for one or more faces.</p>
+        <p className="text-base text-gray-400 mt-1">Apply a one-click enhancement or fine-tune manually.</p>
+      </div>
+      
+      <div>
+        <h4 className="text-base font-semibold text-gray-300 mb-2 text-center">One-Click Enhance</h4>
+        <button
+            onClick={handleNaturalPortraitPreset}
+            disabled={isLoading || isLoadingFaces}
+            className="w-full flex items-center justify-center gap-2 text-center bg-white/10 text-gray-200 font-semibold py-3 px-4 rounded-md transition-all hover:bg-white/20 active:scale-95 disabled:opacity-50 text-base"
+        >
+            <SparklesIcon className="w-5 h-5" />
+            Natural Portrait
+        </button>
+        <p className="text-xs text-gray-500 text-center mt-1">Subtle skin smoothing & moderate eye brightening.</p>
+      </div>
+      
+      <div className="relative">
+          <div className="absolute inset-0 flex items-center" aria-hidden="true"><div className="w-full border-t border-gray-600" /></div>
+          <div className="relative flex justify-center"><span className="bg-gray-800/50 px-2 text-sm text-gray-500 backdrop-blur-sm">Or Manually Adjust</span></div>
       </div>
       
       {!detectionTriggered.current ? (
           <button onClick={handleDetectFaces} disabled={isLoadingFaces || isLoading} className="w-full bg-white/10 text-gray-200 font-semibold py-3 px-4 rounded-md transition-all hover:bg-white/20 active:scale-95 disabled:opacity-50">
-            {isLoadingFaces ? 'Detecting...' : 'Detect Faces'}
+            {isLoadingFaces ? 'Detecting...' : 'Detect Faces for Manual Control'}
           </button>
       ) : (
           renderFaceSelection()
@@ -212,7 +259,7 @@ const FaceRetouchPanel: React.FC<FaceRetouchPanelProps> = ({ onApplyRetouch, isL
         disabled={isLoading || !detectionTriggered.current || detectedFaces.length === 0}
         className="w-full max-w-sm mx-auto mt-2 bg-gradient-to-br from-blue-600 to-blue-500 text-white font-bold py-4 px-6 rounded-lg transition-all duration-300 ease-in-out shadow-lg shadow-blue-500/20 hover:shadow-xl hover:shadow-blue-500/40 hover:-translate-y-px active:scale-95 active:shadow-inner text-lg disabled:from-blue-800 disabled:to-blue-700 disabled:shadow-none disabled:cursor-not-allowed disabled:transform-none"
       >
-        Apply Retouch
+        Apply Manual Adjustments
       </button>
     </div>
   );
