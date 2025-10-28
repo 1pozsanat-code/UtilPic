@@ -21,7 +21,7 @@ import WatermarkPanel, { type WatermarkSettings } from './components/WatermarkPa
 import BackgroundPanel, { type BackgroundSettings } from './components/BackgroundPanel.tsx';
 import OverlayPanel, { type OverlayLayer } from './components/OverlayPanel.tsx';
 import ZoomPanel from './components/ZoomPanel.tsx';
-import { UndoIcon, RedoIcon, EyeIcon, HistoryIcon, UserCircleIcon, PhotoIcon, SparklesIcon, SunIcon, EyeDropperIcon, ArrowUpOnSquareIcon, BullseyeIcon, PaletteIcon, MagicWandIcon, CropIcon, LayersIcon, MagnifyingGlassPlusIcon, WatermarkIcon, TuneIcon, MaskIcon, DocumentDuplicateIcon, SplitScreenIcon, FaceSwapIcon } from './components/icons.tsx';
+import { UndoIcon, RedoIcon, EyeIcon, HistoryIcon, UserCircleIcon, PhotoIcon, SparklesIcon, SunIcon, EyeDropperIcon, ArrowUpOnSquareIcon, BullseyeIcon, PaletteIcon, MagicWandIcon, CropIcon, LayersIcon, MagnifyingGlassPlusIcon, WatermarkIcon, TuneIcon, MaskIcon, DocumentDuplicateIcon, SplitScreenIcon, FaceSwapIcon, PlusIcon, MinusIcon, FitScreenIcon } from './components/icons.tsx';
 import StartScreen from './components/StartScreen.tsx';
 import RestoreSessionModal from './components/RestoreSessionModal.tsx';
 import DownloadModal, { type DownloadSettings } from './components/DownloadModal.tsx';
@@ -1642,32 +1642,34 @@ const App: React.FC = () => {
     // The image must be loaded to get natural dimensions
     if (!container || !img || !img.naturalWidth) return;
 
-    // --- Check if cursor is over the actual image, not the container's empty space ---
-    const containerRect = container.getBoundingClientRect();
-    const cursorX = e.clientX - containerRect.left;
-    const cursorY = e.clientY - containerRect.top;
+    // --- Check if cursor is over the actual image, not the container's empty space, ONLY when not zoomed ---
+    if (viewTransform.scale <= 1) {
+        const containerRect = container.getBoundingClientRect();
+        const cursorX = e.clientX - containerRect.left;
+        const cursorY = e.clientY - containerRect.top;
 
-    const { clientWidth: containerWidth, clientHeight: containerHeight } = container;
-    
-    const imageAspectRatioVal = img.naturalWidth / img.naturalHeight;
-    const containerAspectRatio = containerWidth / containerHeight;
+        const { clientWidth: containerWidth, clientHeight: containerHeight } = container;
+        
+        const imageAspectRatioVal = img.naturalWidth / img.naturalHeight;
+        const containerAspectRatio = containerWidth / containerHeight;
 
-    let renderedImgWidth, renderedImgHeight;
-    if (imageAspectRatioVal > containerAspectRatio) {
-        renderedImgWidth = containerWidth;
-        renderedImgHeight = containerWidth / imageAspectRatioVal;
-    } else {
-        renderedImgHeight = containerHeight;
-        renderedImgWidth = containerHeight * imageAspectRatioVal;
-    }
+        let renderedImgWidth, renderedImgHeight;
+        if (imageAspectRatioVal > containerAspectRatio) {
+            renderedImgWidth = containerWidth;
+            renderedImgHeight = containerWidth / imageAspectRatioVal;
+        } else {
+            renderedImgHeight = containerHeight;
+            renderedImgWidth = containerHeight * imageAspectRatioVal;
+        }
 
-    const imgLeft = (containerWidth - renderedImgWidth) / 2;
-    const imgTop = (containerHeight - renderedImgHeight) / 2;
-    const imgRight = imgLeft + renderedImgWidth;
-    const imgBottom = imgTop + renderedImgHeight;
+        const imgLeft = (containerWidth - renderedImgWidth) / 2;
+        const imgTop = (containerHeight - renderedImgHeight) / 2;
+        const imgRight = imgLeft + renderedImgWidth;
+        const imgBottom = imgTop + renderedImgHeight;
 
-    if (cursorX < imgLeft || cursorX > imgRight || cursorY < imgTop || cursorY > imgBottom) {
-        return; // Don't zoom, allow page scroll
+        if (cursorX < imgLeft || cursorX > imgRight || cursorY < imgTop || cursorY > imgBottom) {
+            return; // Don't zoom, allow page scroll
+        }
     }
     // --- End Check ---
     
