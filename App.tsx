@@ -1671,8 +1671,15 @@ const App: React.FC = () => {
     }
     // --- End Check ---
     
-    e.preventDefault(); // Prevent page scroll because we are zooming
     const { deltaY } = e;
+
+    // If we are at base zoom and trying to zoom out (scroll down),
+    // let the browser handle it (i.e., scroll the page).
+    if (viewTransform.scale <= 1 && deltaY > 0) {
+        return;
+    }
+    
+    e.preventDefault(); // Prevent page scroll because we are zooming
     const rect = container.getBoundingClientRect();
     
     // Determine zoom center: hotspot or mouse cursor
