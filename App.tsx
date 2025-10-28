@@ -1636,11 +1636,43 @@ const App: React.FC = () => {
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     if (!isZoomPanEnabled) return;
-    e.preventDefault();
-    const { deltaY } = e;
-    const container = imageContainerRef.current;
-    if (!container) return;
 
+    const container = imageContainerRef.current;
+    const img = imgRef.current;
+    // The image must be loaded to get natural dimensions
+    if (!container || !img || !img.naturalWidth) return;
+
+    // --- Check if cursor is over the actual image, not the container's empty space ---
+    const containerRect = container.getBoundingClientRect();
+    const cursorX = e.clientX - containerRect.left;
+    const cursorY = e.clientY - containerRect.top;
+
+    const { clientWidth: containerWidth, clientHeight: containerHeight } = container;
+    
+    const imageAspectRatioVal = img.naturalWidth / img.naturalHeight;
+    const containerAspectRatio = containerWidth / containerHeight;
+
+    let renderedImgWidth, renderedImgHeight;
+    if (imageAspectRatioVal > containerAspectRatio) {
+        renderedImgWidth = containerWidth;
+        renderedImgHeight = containerWidth / imageAspectRatioVal;
+    } else {
+        renderedImgHeight = containerHeight;
+        renderedImgWidth = containerHeight * imageAspectRatioVal;
+    }
+
+    const imgLeft = (containerWidth - renderedImgWidth) / 2;
+    const imgTop = (containerHeight - renderedImgHeight) / 2;
+    const imgRight = imgLeft + renderedImgWidth;
+    const imgBottom = imgTop + renderedImgHeight;
+
+    if (cursorX < imgLeft || cursorX > imgRight || cursorY < imgTop || cursorY > imgBottom) {
+        return; // Don't zoom, allow page scroll
+    }
+    // --- End Check ---
+    
+    e.preventDefault(); // Prevent page scroll because we are zooming
+    const { deltaY } = e;
     const rect = container.getBoundingClientRect();
     
     // Determine zoom center: hotspot or mouse cursor
