@@ -24,7 +24,7 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ history, currentIndex, onSe
     };
 
   return (
-    <div className="fixed inset-0 bg-black/30 z-40 animate-fade-in backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/30 z-40 animate-fade-in backdrop-blur-sm" onClick={onClose} aria-modal="true" role="dialog">
       <div
         className="fixed top-0 right-0 h-full w-full max-w-sm bg-gray-900/80 border-l border-gray-700/80 shadow-2xl flex flex-col animate-slide-in-right"
         onClick={e => e.stopPropagation()}

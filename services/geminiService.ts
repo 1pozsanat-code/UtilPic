@@ -1,3 +1,5 @@
+
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -443,15 +445,18 @@ export const generateFaceSwap = async (
     const croppedSourceFacePart = await fileToGenerativePart(croppedSourceFaceFile);
     const maskPart = await fileToGenerativePart(maskFile);
 
-    // 4. Create a direct, procedural prompt for inpainting with a reference.
-    const prompt = `Perform a photorealistic inpainting task. You are given three images in order: the base image, a mask, and a reference face.
-Your task is to replace the area marked white in the mask on the base image. Use the reference face as the content for the replacement.
-The final output must be a single, seamlessly blended image that perfectly matches the lighting, angle, perspective, and skin tone of the base image.`;
+    // 4. Create a new, more direct prompt with a different input order.
+    const prompt = `Perform a photorealistic face swap.
+- Use the face from the **first image (this is the source face)**.
+- Place it onto the person in the **second image (this is the target image)**.
+- The exact area to replace on the target image is marked in white in the **third image (this is the mask)**.
 
-    // 5. Make the API call with the parts in a logical order for this prompt.
+The final result must be perfectly seamless. Match the lighting, angle, and skin tone of the target image. Do not change anything in the target image outside of the masked area.`;
+
+    // 5. Make the API call with the parts in the NEW order described by the prompt.
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
-        contents: { parts: [targetImagePart, maskPart, croppedSourceFacePart, { text: prompt }] },
+        contents: { parts: [croppedSourceFacePart, targetImagePart, maskPart, { text: prompt }] },
         config: {
             responseModalities: [Modality.IMAGE],
         },
