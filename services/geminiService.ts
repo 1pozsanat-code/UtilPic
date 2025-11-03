@@ -660,6 +660,7 @@ CRITICAL INSTRUCTIONS:
 4.  **Maintain Identity:** The identity of the swapped face must be from the 'Source Image'.
 5.  **Preserve Background & Body:** The rest of the 'Target Image' (hair, body, clothing, background) must remain absolutely unchanged.
 6.  **Preserve Dimensions:** The output image MUST have the exact same dimensions as the original 'Target Image': ${targetWidth}x${targetHeight}. Do not crop or change the aspect ratio.
+7.  **Advanced Fusion Technique:** This is not a simple 'cut and paste' operation. You must perform a deep fusion. Analyze the key facial features and identity of the 'Source Image' face. Then, completely reconstruct and re-render that face within the context of the 'Target Image'. This involves adapting the source face's structure to the target's head angle, expression, and integrating it flawlessly with the target's skin texture, grain, and lighting. The result should be a new, composite face that looks as if it were originally part of the target photo.
 
 Safety & Ethics Policy: This tool is for creative editing. Do not use it to create misleading content. Do not alter perceived race or ethnicity.
 
