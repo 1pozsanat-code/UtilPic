@@ -55,6 +55,7 @@ const AdjustmentPanel: React.FC<AdjustmentPanelProps> = ({ onApplyAdjustment, on
     { name: 'Blur Background', prompt: 'Apply a realistic depth-of-field effect, making the background blurry while keeping the main subject in sharp focus.', description: 'Creates a "Portrait Mode" effect by blurring the background.' },
     { name: 'Enhance Details', prompt: 'Slightly enhance the sharpness and details of the image without making it look unnatural.', description: 'Subtly sharpens the image to bring out fine textures.' },
     { name: 'Warmer Lighting', prompt: 'Adjust the color temperature to give the image warmer, golden-hour style lighting.', description: 'Gives the photo a warm, sunny, "golden hour" feel.' },
+    { name: 'Balanced Lighting', prompt: "Adjust the lighting to be more balanced and natural across the entire image. Correct for any harsh shadows or blown-out highlights to create a photorealistic and evenly lit scene.", description: 'Evens out lighting, reducing harsh shadows and bright spots.' },
     { name: 'Studio Light', prompt: 'Add dramatic, professional studio lighting to the main subject.', description: 'Adds dramatic lighting to make the main subject pop.' },
     { name: 'Boost Color Vibrancy', prompt: 'Subtly increase the color saturation and vibrancy across the image for a more vivid, colorful look.', description: 'Makes colors pop without looking unnatural.' },
   ];
