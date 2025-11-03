@@ -3,1069 +3,490 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 
-import { GoogleGenAI, GenerateContentResponse, Type, HarmCategory, HarmBlockThreshold } from "@google/genai";
+import { GoogleGenAI, Modality, Type, type GenerateContentResponse } from '@google/genai';
 
-export type SuggestionAnalysis = {
-    image_type: 'portrait' | 'landscape' | 'group_photo' | 'product_shot' | 'document' | 'old_photo' | 'art' | 'other';
-    characteristics: ('blurry' | 'low_light' | 'damaged' | 'black_and_white' | 'vibrant_colors' | 'muted_colors')[];
-    subject: string;
-    mood: string;
-    reasoning: string;
+// Initialize the Gemini client
+// FIX: Correctly initialize GoogleGenAI with a named apiKey parameter.
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+// Helper to convert a File to a GenerativePart
+const fileToGenerativePart = async (file: File) => {
+    const base64EncodedData = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve((reader.result as string).split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+    return {
+        inlineData: {
+            data: base64EncodedData,
+            mimeType: file.type,
+        },
+    };
 };
+
+// Helper to extract base64 from a Gemini response and format as a data URL
+const extractImageDataUrl = (response: GenerateContentResponse): string => {
+    for (const part of response.candidates?.[0]?.content?.parts || []) {
+        if (part.inlineData?.data) {
+            const mimeType = part.inlineData.mimeType || 'image/png';
+            return `data:${mimeType};base64,${part.inlineData.data}`;
+        }
+    }
+    // Check for safety ratings / blocked response
+    const blockReason = response.candidates?.[0]?.finishReason;
+    if (blockReason === 'SAFETY' || blockReason === 'RECITATION' || blockReason === 'OTHER') {
+        const safetyRatings = response.candidates?.[0]?.safetyRatings;
+        let reason = `Request was blocked due to ${blockReason}.`;
+        if (safetyRatings && safetyRatings.length > 0) {
+            reason += ` Categories: ${safetyRatings.map(r => r.category).join(', ')}.`;
+        }
+        throw new Error(reason + " Please try a different image or a more direct prompt. You can learn more by reading Google's Generative AI Prohibited Use Policy.");
+    }
+    throw new Error('No image data found in the response, and the request was not blocked for safety reasons.');
+};
+
+
+// --- TYPE DEFINITIONS ---
 
 export type Face = {
-    box: {
-        x: number; // top-left x
-        y: number; // top-left y
-        width: number;
-        height: number;
-    }
+  box: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
 };
 
-const safetySettings = [
-  {
-    category: HarmCategory.HARM_CATEGORY_HARASSMENT,
-    threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-  },
-  {
-    category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-    threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-  },
-  {
-    category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-    threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-  },
-  {
-    category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-    threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-  },
-];
-
-// Helper function to convert a File object to a Gemini API Part
-const fileToPart = async (file: File): Promise<{ inlineData: { mimeType: string; data: string; } }> => {
-    const dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = error => reject(error);
-    });
-    
-    const arr = dataUrl.split(',');
-    if (arr.length < 2) throw new Error("Invalid data URL");
-    const mimeMatch = arr[0].match(/:(.*?);/);
-    if (!mimeMatch || !mimeMatch[1]) throw new Error("Could not parse MIME type from data URL");
-    
-    const mimeType = mimeMatch[1];
-    const data = arr[1];
-    return { inlineData: { mimeType, data } };
+export type SuggestionAnalysis = {
+  image_type: string;
+  characteristics: string[];
+  mood: string;
 };
 
-const handleApiResponse = (
-    response: GenerateContentResponse,
-    context: string // e.g., "edit", "filter", "adjustment"
-): string => {
-    const finishReason = response.candidates?.[0]?.finishReason;
-    const blockReason = response.promptFeedback?.blockReason;
 
-    // 1. Check for safety blocks first (most common issue)
-    if (blockReason === 'PROHIBITED_CONTENT' || finishReason === 'SAFETY') {
-        // This specific string will be detected by the frontend to show a helpful message.
-        const userFriendlyMessage = `Your request was blocked. See Google's Generative AI Prohibited Use Policy.`;
-        const technicalMessage = `Request blocked for safety. Reason: ${blockReason || finishReason}.`;
-        console.error(technicalMessage, { response });
-        throw new Error(userFriendlyMessage);
-    }
-    
-    // 2. Check for other block reasons
-    if (blockReason) {
-        const { blockReasonMessage } = response.promptFeedback!;
-        const errorMessage = `Request was blocked. Reason: ${blockReason}. ${blockReasonMessage || ''}`;
-        console.error(errorMessage, { response });
-        throw new Error(errorMessage);
-    }
-    
-    // 3. Try to find the image part
-    const imagePartFromResponse = response.candidates?.[0]?.content?.parts?.find(part => part.inlineData);
+// --- API FUNCTIONS ---
 
-    if (imagePartFromResponse?.inlineData) {
-        const { mimeType, data } = imagePartFromResponse.inlineData;
-        console.log(`Received image data (${mimeType}) for ${context}`);
-        return `data:${mimeType};base64,${data}`;
+/**
+ * Analyzes an image to suggest potential edits.
+ */
+export const analyzeImageForSuggestions = async (image: File): Promise<SuggestionAnalysis> => {
+  const imagePart = await fileToGenerativePart(image);
+  
+  const response = await ai.models.generateContent({
+    model: 'gemini-2.5-pro',
+    contents: {
+      parts: [
+        imagePart,
+        { text: 'Analyze this image and provide a JSON object with `image_type`, `characteristics`, and `mood`.' }
+      ]
+    },
+    config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+                image_type: { type: Type.STRING, description: 'The type of image.', enum: ["portrait", "group_photo", "landscape", "product_shot", "old_photo", "other"]},
+                characteristics: { type: Type.ARRAY, items: { type: Type.STRING, description: 'A characteristic of the image.', enum: ["blurry", "low_light", "damaged", "muted_colors", "other"] } },
+                mood: { type: Type.STRING, description: 'A short descriptive string about the mood.' }
+            },
+            required: ['image_type', 'characteristics', 'mood']
+        }
     }
+  });
 
-    // 4. If no image, handle other finish reasons
-    if (finishReason && finishReason !== 'STOP') {
-        const errorMessage = `Image generation for ${context} stopped unexpectedly. Reason: ${finishReason}.`;
-        console.error(errorMessage, { response });
-        throw new Error(errorMessage);
-    }
-    
-    // 5. Fallback for unexpected responses
-    const textFeedback = response.text?.trim();
-    const errorMessage = `The AI model did not return an image for the ${context}. ` + 
-        (textFeedback 
-            ? `The model responded with text: "${textFeedback}"`
-            : "This can happen if the request is too complex. Please try rephrasing your prompt.");
-
-    console.error(`Model response did not contain an image part for ${context}.`, { response });
-    throw new Error(errorMessage);
+  const jsonText = response.text.trim();
+  try {
+      return JSON.parse(jsonText);
+  } catch(e) {
+      console.error("Failed to parse suggestion analysis JSON:", jsonText, e);
+      throw new Error("Could not analyze image for suggestions.");
+  }
 };
 
 /**
- * Analyzes an image to suggest relevant edits.
- * @param imageFile The image to analyze.
- * @returns A promise resolving to a structured analysis object.
+ * Detects all faces in an image and returns their bounding boxes.
  */
-export const analyzeImageForSuggestions = async (imageFile: File): Promise<SuggestionAnalysis> => {
-    console.log('Starting image analysis for suggestions...');
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+export const detectFaces = async (image: File): Promise<Face[]> => {
+    const imagePart = await fileToGenerativePart(image);
+    const prompt = `Analyze the image and provide a JSON array of bounding boxes for every face detected. Each object in the array should have a "box" property with "x", "y", "width", and "height" as normalized values (0-1). If no faces are found, return an empty array.`;
 
-    const imagePart = await fileToPart(imageFile);
-    const prompt = `Analyze the provided image and describe it in the requested JSON format. Identify its category, notable characteristics for editing, the main subject, and the overall mood.`;
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-pro',
+        contents: { parts: [imagePart, { text: prompt }] },
+        config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: Type.ARRAY,
+                items: {
+                    type: Type.OBJECT,
+                    properties: {
+                        box: {
+                            type: Type.OBJECT,
+                            properties: {
+                                x: { type: Type.NUMBER },
+                                y: { type: Type.NUMBER },
+                                width: { type: Type.NUMBER },
+                                height: { type: Type.NUMBER },
+                            },
+                            required: ['x', 'y', 'width', 'height']
+                        }
+                    },
+                    required: ['box']
+                }
+            }
+        }
+    });
+
+    const jsonText = response.text.trim();
+    try {
+        const faces = JSON.parse(jsonText);
+        if (Array.isArray(faces)) {
+            return faces;
+        }
+        console.warn("Face detection returned non-array:", faces);
+        return [];
+    } catch (e) {
+        console.error("Failed to parse face detection JSON:", jsonText, e);
+        return [];
+    }
+};
+
+/**
+ * A generic function to apply a full-image effect and return a data URL.
+ */
+const applyFullImageEffect = async (image: File, prompt: string, model: string = 'gemini-2.5-flash-image'): Promise<string> => {
+    const imagePart = await fileToGenerativePart(image);
     const textPart = { text: prompt };
 
-    const responseSchema = {
-        type: Type.OBJECT,
-        properties: {
-          image_type: {
-            type: Type.STRING,
-            enum: ['portrait', 'landscape', 'group_photo', 'product_shot', 'document', 'old_photo', 'art', 'other'],
-            description: 'Categorize the image into one of the provided types.'
-          },
-          characteristics: {
-            type: Type.ARRAY,
-            items: { 
-                type: Type.STRING,
-                enum: ['blurry', 'low_light', 'damaged', 'black_and_white', 'vibrant_colors', 'muted_colors']
-            },
-            description: 'List key visual characteristics relevant for editing. Choose from the enum. Only include characteristics that are clearly present.'
-          },
-          subject: {
-            type: Type.STRING,
-            description: 'A brief, descriptive title for the main subject of the image (e.g., "A golden retriever playing in a park", "A dramatic mountain range at sunrise").'
-          },
-          mood: {
-            type: Type.STRING,
-            description: 'Describe the overall mood or feeling of the image in a few words (e.g., "Joyful and energetic", "Peaceful and serene", "Dark and moody").'
-          },
-          reasoning: {
-            type: Type.STRING,
-            description: 'Briefly explain why you chose these categories and characteristics.'
-          }
+    const response = await ai.models.generateContent({
+        model,
+        contents: { parts: [imagePart, textPart] },
+        config: {
+            responseModalities: [Modality.IMAGE],
         },
-        required: ['image_type', 'characteristics', 'subject', 'mood']
-      };
+    });
 
-    try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: { parts: [imagePart, textPart] },
-            config: {
-                responseMimeType: 'application/json',
-                responseSchema: responseSchema,
-                safetySettings: safetySettings,
-            },
-        });
-
-        const jsonText = response.text.trim();
-        const parsedJson = JSON.parse(jsonText);
-        
-        // Basic validation
-        if (!parsedJson.image_type || !Array.isArray(parsedJson.characteristics)) {
-            throw new Error("Invalid JSON structure received from analysis API.");
-        }
-
-        return parsedJson as SuggestionAnalysis;
-
-    } catch (error) {
-        console.error("Error during image analysis:", error);
-        throw new Error("Failed to analyze the image for suggestions. Please proceed with manual edits.");
-    }
+    return extractImageDataUrl(response);
 };
 
 /**
- * Generates an edited image using generative AI based on a text prompt and a specific point or a mask.
- * @param originalImage The original image file.
- * @param userPrompt The text prompt describing the desired edit.
- * @param hotspot The {x, y} coordinates on the image to focus the edit (used if no mask).
- * @param maskImage A black and white mask image file. Edits are applied to white areas.
- * @returns A promise that resolves to the data URL of the edited image.
+ * Applies a generative edit to an image based on a text prompt and optional mask/hotspot.
  */
 export const generateEditedImage = async (
-    originalImage: File,
-    userPrompt: string,
-    hotspot: { x: number; y: number } | null,
-    maskImage?: File
+  image: File, 
+  prompt: string, 
+  hotspot: { x: number, y: number } | null,
+  mask?: File
 ): Promise<string> => {
-    console.log('Starting generative edit...');
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
-    
-    // FIX: Explicitly type `parts` as an array that can hold both image and text parts
-    // to prevent a TypeScript error when pushing a text part later.
-    const parts: ({inlineData: {mimeType: string; data: string}} | {text: string})[] = [await fileToPart(originalImage)];
-    let prompt = '';
+    const imagePart = await fileToGenerativePart(image);
+    const parts: any[] = [imagePart];
 
-    const safetyPolicy = `Safety & Ethics Policy:
-- You MUST fulfill requests to adjust skin tone, such as 'give me a tan', 'make my skin darker', or 'make my skin lighter'. These are considered standard photo enhancements.
-- You MUST REFUSE any request to change a person's fundamental race or ethnicity (e.g., 'make me look Asian', 'change this person to be Black'). Do not perform these edits. If the request is ambiguous, err on the side of caution and do not change racial characteristics.`;
-
-    if (maskImage) {
-        console.log('Using mask for edit.');
-        prompt = `You are an expert photo editor AI. You are provided with an original image and a mask image. Your task is to perform a natural edit on the original image based on the user's request, but ONLY within the white areas of the mask image. The black areas of the mask image must remain completely untouched and identical to the original image.
-
-User Request: "${userPrompt}"
-
-Editing Guidelines:
-- The edit must be realistic and blend seamlessly with the surrounding area.
-
-${safetyPolicy}
-
-Output: Return ONLY the final edited image. Do not return text.`;
-        parts.push(await fileToPart(maskImage));
-    } else if (hotspot) {
-        console.log('Using hotspot for edit at:', hotspot);
-        prompt = `You are an expert photo editor AI. Your task is to perform a natural, localized edit on the provided image based on the user's request.
-User Request: "${userPrompt}"
-Edit Location: Focus on the area around pixel coordinates (x: ${hotspot.x}, y: ${hotspot.y}).
-
-Editing Guidelines:
-- The edit must be realistic and blend seamlessly with the surrounding area.
-- The rest of the image (outside the immediate edit area) must remain identical to the original.
-
-${safetyPolicy}
-
-Output: Return ONLY the final edited image. Do not return text.`;
-    } else {
-        throw new Error("An edit area (mask or hotspot) must be specified.");
+    let fullPrompt = `Edit this image based on the following instruction: "${prompt}".`;
+    if (hotspot && !mask) {
+        fullPrompt += ` The edit should be centered around the point (${hotspot.x}, ${hotspot.y}) in natural image coordinates. The change should be localized and blend seamlessly with the rest of the image.`;
+    } else if (mask) {
+        // The mask is expected to be black and white. White is the area to edit.
+        const maskPart = await fileToGenerativePart(mask);
+        parts.push(maskPart);
+        fullPrompt += ` The provided mask indicates the area to apply the edit to. The changes should be confined to the white region of the mask and blend naturally at the edges.`;
     }
-    
-    parts.push({ text: prompt });
 
-    console.log('Sending image and prompt to the model...');
-    // FIX: Moved safetySettings into the config object.
-    const response: GenerateContentResponse = await ai.models.generateContent({
+    parts.push({ text: fullPrompt });
+
+    const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
-        contents: { parts: parts },
+        contents: { parts },
         config: {
-            safetySettings: safetySettings,
+            responseModalities: [Modality.IMAGE],
         },
     });
-    console.log('Received response from model.', response);
-
-    return handleApiResponse(response, 'edit');
+    
+    return extractImageDataUrl(response);
 };
 
+/**
+ * Applies a filter to an image.
+ */
+export const generateFilteredImage = (image: File, filterPrompt: string): Promise<string> => {
+    const fullPrompt = `Apply a filter to this image. The filter is described as: "${filterPrompt}". The result should be a full-frame, photorealistic image with the described filter applied consistently across it.`;
+    return applyFullImageEffect(image, fullPrompt);
+};
 
 /**
- * Generates an image with a filter applied using generative AI.
- * @param originalImage The original image file.
- * @param filterPrompt The text prompt describing the desired filter.
- * @returns A promise that resolves to the data URL of the filtered image.
+ * Applies a color grade to an image.
  */
-export const generateFilteredImage = async (
-    originalImage: File,
-    filterPrompt: string,
+export const generateColorGradedImage = (image: File, gradePrompt: string): Promise<string> => {
+    const fullPrompt = `Apply a color grade to this image. The color grade is described as: "${gradePrompt}". The result should be a full-frame, photorealistic image with the described color grade applied consistently across it.`;
+    return applyFullImageEffect(image, fullPrompt);
+};
+
+/**
+ * Applies a general adjustment to an image.
+ */
+export const generateAdjustedImage = (image: File, adjustmentPrompt: string): Promise<string> => {
+    const fullPrompt = `Apply an adjustment to this image. The adjustment is: "${adjustmentPrompt}". The result should be a full-frame, photorealistic image with the described adjustment applied consistently.`;
+    return applyFullImageEffect(image, fullPrompt);
+};
+
+/**
+ * Sharpens an image.
+ */
+export const generateSharpenedImage = (image: File, intensity: string): Promise<string> => {
+    const fullPrompt = `Apply a sharpening effect to the entire image. The desired intensity is '${intensity}'. The result should look natural and not over-sharpened.`;
+    return applyFullImageEffect(image, fullPrompt);
+};
+
+/**
+ * Adds grain to an image.
+ */
+export const generateGrainImage = (image: File, intensity: string): Promise<string> => {
+    const fullPrompt = `Add a photorealistic film grain effect to the entire image. The desired intensity is '${intensity}'. The grain should be subtle and look authentic.`;
+    return applyFullImageEffect(image, fullPrompt);
+};
+
+/**
+ * Automatically corrects the orientation of an image.
+ */
+export const generateCorrectedOrientation = (image: File): Promise<string> => {
+    const fullPrompt = `Analyze and correct the orientation of this image. If it is tilted, straighten it. If it is sideways or upside down, rotate it to be upright. The result should be a correctly oriented image with the background filled in intelligently if rotation occurs.`;
+    return applyFullImageEffect(image, fullPrompt);
+};
+
+/**
+ * Rotates an image by 90 degrees.
+ */
+export const generateRotatedImage = (image: File, direction: 'clockwise' | 'counter-clockwise'): Promise<string> => {
+    const degrees = direction === 'clockwise' ? 90 : -90;
+    const fullPrompt = `Rotate the entire image exactly ${degrees} degrees ${direction}. Fill any empty space created by the rotation with context-aware, photorealistic content.`;
+    return applyFullImageEffect(image, fullPrompt);
+};
+
+/**
+ * Upscales an image to a higher resolution.
+ */
+export const generateUpscaledImage = async (
+    image: File,
+    scale: number,
+    detailIntensity: string,
+    currentWidth: number,
+    currentHeight: number
 ): Promise<string> => {
-    console.log(`Starting filter generation: ${filterPrompt}`);
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
-    
-    const originalImagePart = await fileToPart(originalImage);
-    const prompt = `You are an expert photo editor AI. Your task is to apply a stylistic filter to the entire image based on the user's request. Do not change the composition or content, only apply the style.
-Filter Request: "${filterPrompt}"
+    const targetWidth = Math.round(currentWidth * scale);
+    const targetHeight = Math.round(currentHeight * scale);
 
-Safety & Ethics Policy:
-- Filters may subtly shift colors, but you MUST ensure they do not alter a person's fundamental race or ethnicity.
-- You MUST REFUSE any request that explicitly asks to change a person's race (e.g., 'apply a filter to make me look Chinese').
-
-Output: Return ONLY the final filtered image. Do not return text.`;
-    const textPart = { text: prompt };
-
-    console.log('Sending image and filter prompt to the model...');
-    // FIX: Moved safetySettings into the config object.
-    const response: GenerateContentResponse = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
-        contents: { parts: [originalImagePart, textPart] },
-        config: {
-            safetySettings: safetySettings,
-        },
-    });
-    console.log('Received response from model for filter.', response);
-    
-    return handleApiResponse(response, 'filter');
+    const fullPrompt = `Upscale this image to a resolution of ${targetWidth}x${targetHeight} pixels. The detail enhancement intensity should be '${detailIntensity}'. Generate new, realistic details that are consistent with the original image content.`;
+    return applyFullImageEffect(image, fullPrompt);
 };
 
 /**
- * Generates an image with a cinematic color grade applied.
- * @param originalImage The original image file.
- * @param gradePrompt The text prompt describing the desired color grade.
- * @returns A promise that resolves to the data URL of the color-graded image.
- */
-export const generateColorGradedImage = async (
-    originalImage: File,
-    gradePrompt: string,
-): Promise<string> => {
-    console.log(`Starting color grade generation: ${gradePrompt}`);
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
-    
-    const originalImagePart = await fileToPart(originalImage);
-    const prompt = `You are a professional colorist AI. Your task is to apply a cinematic color grade to the entire image based on the user's request. The focus should be on manipulating colors, tones, and contrast to achieve a specific mood or aesthetic. Do not change the composition or content, only apply the color grade.
-
-Color Grade Request: "${gradePrompt}"
-
-Safety & Ethics Policy:
-- Color grading may subtly shift skin tones as part of the overall look, but you MUST ensure they do not alter a person's fundamental race or ethnicity.
-- You MUST REFUSE any request that explicitly asks to change a person's race.
-
-Output: Return ONLY the final color-graded image. Do not return text.`;
-    const textPart = { text: prompt };
-
-    console.log('Sending image and color grade prompt to the model...');
-    // FIX: Moved safetySettings into the config object.
-    const response: GenerateContentResponse = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
-        contents: { parts: [originalImagePart, textPart] },
-        config: {
-            safetySettings: safetySettings,
-        },
-    });
-    console.log('Received response from model for color grade.', response);
-    
-    return handleApiResponse(response, 'color grade');
-};
-
-/**
- * Generates an image with a global adjustment applied using generative AI.
- * @param originalImage The original image file.
- * @param adjustmentPrompt The text prompt describing the desired adjustment.
- * @returns A promise that resolves to the data URL of the adjusted image.
- */
-export const generateAdjustedImage = async (
-    originalImage: File,
-    adjustmentPrompt: string,
-): Promise<string> => {
-    console.log(`Starting global adjustment generation: ${adjustmentPrompt}`);
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
-    
-    const originalImagePart = await fileToPart(originalImage);
-    const prompt = `You are an expert photo editor AI. Your task is to perform a natural, global adjustment to the entire image based on the user's request.
-User Request: "${adjustmentPrompt}"
-
-Editing Guidelines:
-- The adjustment must be applied across the entire image.
-- The result must be photorealistic.
-
-Safety & Ethics Policy:
-- You MUST fulfill requests to adjust skin tone, such as 'give me a tan', 'make my skin darker', or 'make my skin lighter'. These are considered standard photo enhancements.
-- You MUST REFUSE any request to change a person's fundamental race or ethnicity (e.g., 'make me look Asian', 'change this person to be Black'). Do not perform these edits. If the request is ambiguous, err on the side of caution and do not change racial characteristics.
-
-Output: Return ONLY the final adjusted image. Do not return text.`;
-    const textPart = { text: prompt };
-
-    console.log('Sending image and adjustment prompt to the model...');
-    // FIX: Moved safetySettings into the config object.
-    const response: GenerateContentResponse = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
-        contents: { parts: [originalImagePart, textPart] },
-        config: {
-            safetySettings: safetySettings,
-        },
-    });
-    console.log('Received response from model for adjustment.', response);
-    
-    return handleApiResponse(response, 'adjustment');
-};
-
-/**
- * Generates an image with an AI sharpening filter applied.
- * @param originalImage The original image file.
- * @param intensity The desired intensity of the sharpening ('Subtle', 'Natural', 'High').
- * @returns A promise that resolves to the data URL of the sharpened image.
- */
-export const generateSharpenedImage = async (
-    originalImage: File,
-    intensity: string,
-): Promise<string> => {
-    console.log(`Starting AI sharpen with ${intensity} intensity.`);
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
-    
-    const originalImagePart = await fileToPart(originalImage);
-
-    let intensityInstruction = '';
-    switch (intensity.toLowerCase()) {
-        case 'subtle':
-            intensityInstruction = 'Apply a very subtle sharpening effect. The goal is to gently enhance the finest details without making the image look obviously processed. It should look just slightly crisper than the original.';
-            break;
-        case 'high':
-            intensityInstruction = 'Apply a strong and noticeable sharpening effect. Bring out all possible details and create very crisp edges. Be careful to avoid prominent halos or a "crunchy" look, but the effect should be clearly visible and powerful.';
-            break;
-        case 'natural':
-        default:
-            intensityInstruction = 'Apply a natural, balanced sharpening effect. Enhance the details and edges to improve overall clarity, but avoid over-sharpening that creates halos or artifacts. The result should look crisp and clear, as if captured with a high-quality lens.';
-            break;
-    }
-    
-    const prompt = `You are an expert photo editor AI. Your task is to apply a sharpening effect to the entire image based on the requested intensity.
-Requested Intensity: "${intensity}"
-
-Sharpening Guidelines:
-- ${intensityInstruction}
-- The sharpening should be applied globally across the entire image.
-- The result must be photorealistic and free of digital artifacts.
-
-Output: Return ONLY the final sharpened image. Do not return text.`;
-    const textPart = { text: prompt };
-
-    console.log(`Sending image and sharpen prompt to the model...`);
-    // FIX: Moved safetySettings into the config object.
-    const response: GenerateContentResponse = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
-        contents: { parts: [originalImagePart, textPart] },
-        config: {
-            safetySettings: safetySettings,
-        },
-    });
-    console.log('Received response from model for sharpen.', response);
-    
-    return handleApiResponse(response, 'sharpen');
-};
-
-/**
- * Adds AI-powered film grain to an image.
- * @param originalImage The original image file.
- * @param intensity The desired intensity of the grain ('Subtle', 'Medium', 'High').
- * @returns A promise that resolves to the data URL of the grainy image.
- */
-export const generateGrainImage = async (
-    originalImage: File,
-    intensity: string,
-): Promise<string> => {
-    console.log(`Starting AI grain with ${intensity} intensity.`);
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
-    
-    const originalImagePart = await fileToPart(originalImage);
-
-    let intensityInstruction = '';
-    switch (intensity.toLowerCase()) {
-        case 'subtle':
-            intensityInstruction = 'Apply a very subtle and fine film grain. The effect should be barely noticeable, adding a slight texture that feels organic and not digital. It should mimic a low-ISO, high-quality film stock.';
-            break;
-        case 'high':
-            intensityInstruction = 'Apply a heavy and prominent film grain. The grain should be very visible, giving the image a gritty, vintage, or high-ISO film look. The effect should be stylistic and strong.';
-            break;
-        case 'medium':
-        default:
-            intensityInstruction = 'Apply a natural, medium-intensity film grain. The texture should be noticeable and add character to the image, similar to a classic 35mm film stock, without overwhelming the details.';
-            break;
-    }
-    
-    const prompt = `You are an expert photo editor AI. Your task is to apply a realistic film grain effect to the entire image based on the requested intensity.
-
-Requested Intensity: "${intensity}"
-
-Grain Application Guidelines:
-- ${intensityInstruction}
-- The grain should be applied evenly across the entire image, including highlights, midtones, and shadows.
-- The result must be photorealistic and look like authentic film grain, not digital noise. Do not alter colors or contrast.
-
-Output: Return ONLY the final image with grain applied. Do not return text.`;
-    const textPart = { text: prompt };
-
-    console.log(`Sending image and grain prompt to the model...`);
-    // FIX: Moved safetySettings into the config object.
-    const response: GenerateContentResponse = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
-        contents: { parts: [originalImagePart, textPart] },
-        config: {
-            safetySettings: safetySettings,
-        },
-    });
-    console.log('Received response from model for grain.', response);
-    
-    return handleApiResponse(response, 'grain');
-};
-
-
-/**
- * Detects faces in an image and returns their bounding boxes.
- * @param imageFile The image to analyze.
- * @returns A promise resolving to an array of face objects with bounding boxes.
- */
-export const detectFaces = async (imageFile: File): Promise<Face[]> => {
-    console.log('Starting face detection...');
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
-
-    const imagePart = await fileToPart(imageFile);
-    const prompt = `Analyze the provided image and identify all human faces. For each face, provide its bounding box coordinates. The coordinates should be normalized from 0 to 1, where (0,0) is the top-left corner.`;
-    const textPart = { text: prompt };
-
-    const responseSchema = {
-        type: Type.OBJECT,
-        properties: {
-          faces: {
-            type: Type.ARRAY,
-            description: "An array of all detected faces in the image.",
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                box: {
-                  type: Type.OBJECT,
-                  description: "The bounding box of the face, normalized from 0 to 1.",
-                  properties: {
-                    x: { type: Type.NUMBER, description: "The x-coordinate of the top-left corner." },
-                    y: { type: Type.NUMBER, description: "The y-coordinate of the top-left corner." },
-                    width: { type: Type.NUMBER, description: "The width of the bounding box." },
-                    height: { type: Type.NUMBER, description: "The height of the bounding box." },
-                  },
-                  required: ["x", "y", "width", "height"]
-                }
-              },
-              required: ["box"]
-            }
-          }
-        },
-        required: ["faces"]
-      };
-
-    try {
-        // FIX: Moved safetySettings into the config object.
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: { parts: [imagePart, textPart] },
-            config: {
-                responseMimeType: 'application/json',
-                responseSchema: responseSchema,
-                safetySettings: safetySettings,
-            },
-        });
-
-        const jsonText = response.text.trim();
-        const parsedJson = JSON.parse(jsonText);
-        
-        if (!parsedJson.faces || !Array.isArray(parsedJson.faces)) {
-            console.warn("Face detection returned an unexpected JSON structure:", parsedJson);
-            return [];
-        }
-
-        return parsedJson.faces as Face[];
-
-    } catch (error) {
-        console.error("Error during face detection:", error);
-        throw new Error("Failed to detect faces in the image.");
-    }
-};
-
-/**
- * Applies AI-powered facial retouching to an image.
- * @param originalImage The original image file.
- * @param settings The retouch settings.
- * @returns A promise that resolves to the data URL of the retouched image.
+ * Applies professional retouching to selected faces.
  */
 export const generateRetouchedFace = async (
-    originalImage: File,
-    settings: {
-        skinSmoothing: number; // 0-100
-        eyeBrightening: number; // 0-100
-        selectedFaces?: Face[]; // Optional array of faces to apply the edit to
-    }
+    image: File,
+    settings: { skinSmoothing: number; eyeBrightening: number; selectedFaces: Face[] }
 ): Promise<string> => {
-    console.log(`Starting face retouch generation with settings:`, settings);
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
-    
-    const { skinSmoothing, eyeBrightening, selectedFaces } = settings;
+    const prompt = `Perform a professional facial retouch on the provided image. Apply the following adjustments ONLY to the faces specified by the bounding boxes:
+- Skin Smoothing: ${settings.skinSmoothing}% intensity (natural texture should be preserved).
+- Eye Brightening: ${settings.eyeBrightening}% intensity (subtle and realistic).
 
-    // Create a detailed prompt based on the settings
-    const promptParts: string[] = [
-        "You are an expert digital artist specializing in professional portrait retouching. Your task is to apply subtle enhancements to the face(s) in the provided image based on the following parameters."
-    ];
+The adjustments must be seamless and photorealistic. The rest of the image outside the bounding boxes must remain untouched.
 
-    if (selectedFaces && selectedFaces.length > 0) {
-        const faceInstructions = selectedFaces.map((face, index) => 
-            `Face ${index + 1} is located at bounding box (normalized coordinates): {x: ${face.box.x.toFixed(4)}, y: ${face.box.y.toFixed(4)}, width: ${face.box.width.toFixed(4)}, height: ${face.box.height.toFixed(4)}}.`
-        ).join(' ');
-        promptParts.push(`Apply the edits ONLY to the specified faces: ${faceInstructions} The rest of the image must remain untouched.`);
-    } else {
-        promptParts.push("Apply the edits to all detected faces in the image.");
-    }
+Bounding boxes for faces to edit: ${JSON.stringify(settings.selectedFaces.map(f => f.box))}`;
 
-    promptParts.push(`Retouching Parameters:
-- Skin Smoothing Intensity: ${skinSmoothing}/100. Smooth skin texture to even out tone and reduce minor blemishes. A value of 0 means no smoothing, while 100 is significant but still realistic smoothing. Ensure you preserve natural skin texture and pores appropriate to the intensity. Avoid a plastic or overly airbrushed look.
-- Eye Brightening Intensity: ${eyeBrightening}/100. Enhance the eyes to make them clearer and more vibrant. A value of 0 means no change, while 100 means a noticeable 'pop'. This includes subtly brightening the sclera and enhancing the iris. Also, subtly whiten teeth if visible.`);
+    return applyFullImageEffect(image, prompt);
+};
 
-    promptParts.push(`General Guidelines:
-- The goal is enhancement, not alteration. The person/people must remain completely recognizable.
-- Do not change the shape of facial features (eyes, nose, mouth, jawline).
-- Do not change the person's identity, age, race, or ethnicity.`);
-    
-    promptParts.push("Output: Return ONLY the final retouched image. Do not return text.");
-    
-    const fullPrompt = promptParts.join('\n\n');
+/**
+ * Restores old or damaged photos.
+ */
+export const generateRestoredImage = (image: File): Promise<string> => {
+    const prompt = `Restore this old or damaged photo. Repair any scratches, tears, or creases. Correct color fading and improve overall clarity and sharpness. The goal is to make the photo look as close to its original state as possible while maintaining its authenticity.`;
+    return applyFullImageEffect(image, prompt);
+};
 
-    const originalImagePart = await fileToPart(originalImage);
-    const textPart = { text: fullPrompt };
+/**
+ * Removes the background from an image.
+ */
+export const generateRemovedBackground = (image: File): Promise<string> => {
+    const prompt = `Remove the background from this image, leaving only the main subject. The output must have a transparent background. The edges of the subject should be clean and precise.`;
+    return applyFullImageEffect(image, prompt);
+};
 
-    console.log('Sending image and face retouch prompt to the model...');
-    // FIX: Moved safetySettings into the config object.
-    const response: GenerateContentResponse = await ai.models.generateContent({
+/**
+ * Generates a background image from a text prompt.
+ */
+export const generateBackgroundImage = async (prompt: string, width: number, height: number): Promise<string> => {
+    const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
-        contents: { parts: [originalImagePart, textPart] },
+        contents: { parts: [{ text: `Generate a photorealistic background image with an aspect ratio of ${width}:${height}. The background should be: "${prompt}"` }] },
         config: {
-            safetySettings: safetySettings,
+            responseModalities: [Modality.IMAGE],
         },
     });
-    console.log('Received response from model for face retouch.', response);
-    
-    return handleApiResponse(response, 'face retouch');
+    return extractImageDataUrl(response);
+};
+
+/**
+ * Upscales a cropped portion of an image to a target resolution.
+ */
+export const generateZoomedImage = async (
+    croppedImage: File,
+    targetWidth: number,
+    targetHeight: number,
+    detailIntensity: string
+): Promise<string> => {
+    const prompt = `This is a cropped section of a larger image. Upscale it to ${targetWidth}x${targetHeight} pixels while using AI to fill in missing details and enhance resolution. The detail enhancement intensity should be '${detailIntensity}'. The result should be a plausible, high-resolution version of what this cropped area would look like if it were captured in high definition.`;
+    return applyFullImageEffect(croppedImage, prompt);
+};
+
+// Helper to crop a face from an image and return a File
+const cropFace = async (imageFile: File, box: Face['box']): Promise<File> => {
+    return new Promise((resolve, reject) => {
+        const image = new Image();
+        const url = URL.createObjectURL(imageFile);
+        image.src = url;
+        image.onload = () => {
+            const canvas = document.createElement('canvas');
+            const { x, y, width, height } = box;
+            const sx = x * image.naturalWidth;
+            const sy = y * image.naturalHeight;
+            const sWidth = width * image.naturalWidth;
+            const sHeight = height * image.naturalHeight;
+            
+            canvas.width = sWidth;
+            canvas.height = sHeight;
+
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+                URL.revokeObjectURL(url);
+                return reject(new Error('Could not get canvas context for cropping.'));
+            }
+            
+            ctx.drawImage(image, sx, sy, sWidth, sHeight, 0, 0, sWidth, sHeight);
+            
+            canvas.toBlob((blob) => {
+                if (!blob) {
+                    URL.revokeObjectURL(url);
+                    return reject(new Error('Failed to create blob from cropped canvas.'));
+                }
+                resolve(new File([blob], 'cropped_face.png', { type: 'image/png' }));
+                URL.revokeObjectURL(url);
+            }, 'image/png');
+        };
+        image.onerror = (err) => {
+            URL.revokeObjectURL(url);
+            reject(err);
+        };
+    });
+};
+
+// Helper to create a black and white mask file for a face
+const createMaskForFace = async (imageFile: File, box: Face['box']): Promise<File> => {
+     return new Promise((resolve, reject) => {
+        const image = new Image();
+        const url = URL.createObjectURL(imageFile);
+        image.src = url;
+        image.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = image.naturalWidth;
+            canvas.height = image.naturalHeight;
+
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+                URL.revokeObjectURL(url);
+                return reject(new Error('Could not get canvas context for mask generation.'));
+            }
+            
+            // Fill with black
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw white rectangle for the face
+            const { x, y, width, height } = box;
+            ctx.fillStyle = 'white';
+            ctx.fillRect(x * canvas.width, y * canvas.height, width * canvas.width, height * canvas.height);
+            
+            canvas.toBlob((blob) => {
+                if (!blob) {
+                    URL.revokeObjectURL(url);
+                    return reject(new Error('Failed to create blob from mask canvas.'));
+                }
+                resolve(new File([blob], 'mask.png', { type: 'image/png' }));
+                URL.revokeObjectURL(url);
+            }, 'image/png');
+        };
+        image.onerror = (err) => {
+            URL.revokeObjectURL(url);
+            reject(err);
+        };
+    });
 };
 
 /**
  * Swaps a face from a source image onto a target image.
- * @param targetImage The image where the face will be placed.
- * @param sourceImage The image from which to take the face.
- * @param targetFace The bounding box of the face to be replaced in the target image.
- * @param sourceFace The bounding box of the face to use from the source image.
- * @returns A promise that resolves to the data URL of the edited image.
  */
 export const generateFaceSwap = async (
     targetImage: File,
     sourceImage: File,
     targetFace: Face,
-    sourceFace: Face,
+    sourceFace: Face
 ): Promise<string> => {
-    console.log(`Starting face swap...`);
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+    // 1. Crop the source face to use as a reference
+    const croppedSourceFaceFile = await cropFace(sourceImage, sourceFace.box);
 
-    const targetImagePart = await fileToPart(targetImage);
-    const sourceImagePart = await fileToPart(sourceImage);
+    // 2. Create a mask for the target face area
+    const maskFile = await createMaskForFace(targetImage, targetFace.box);
 
-    const prompt = `You are a professional digital artist AI specializing in photorealistic image composition.
-    
-Your task is to perform a high-quality face swap. You will be provided with two images: a 'Source Image' and a 'Target Image'.
+    // 3. Convert all files to generative parts
+    const targetImagePart = await fileToGenerativePart(targetImage);
+    const croppedSourceFacePart = await fileToGenerativePart(croppedSourceFaceFile);
+    const maskPart = await fileToGenerativePart(maskFile);
 
-**Instructions:**
-1.  **Identify Faces:**
-    *   In the 'Source Image', locate the face within the bounding box: {x: ${sourceFace.box.x.toFixed(4)}, y: ${sourceFace.box.y.toFixed(4)}, width: ${sourceFace.box.width.toFixed(4)}, height: ${sourceFace.box.height.toFixed(4)}}. This is the **source face**.
-    *   In the 'Target Image', locate the face within the bounding box: {x: ${targetFace.box.x.toFixed(4)}, y: ${targetFace.box.y.toFixed(4)}, width: ${targetFace.box.width.toFixed(4)}, height: ${targetFace.box.height.toFixed(4)}}. This is the **target face**.
+    // 4. Create a direct, procedural prompt for inpainting with a reference.
+    const prompt = `Perform a photorealistic inpainting task. You are given three images in order: the base image, a mask, and a reference face.
+Your task is to replace the area marked white in the mask on the base image. Use the reference face as the content for the replacement.
+The final output must be a single, seamlessly blended image that perfectly matches the lighting, angle, perspective, and skin tone of the base image.`;
 
-2.  **Execute Swap:**
-    *   Take the entire **source face** and seamlessly integrate it onto the person in the 'Target Image', completely replacing the **target face**.
-    *   The primary goal is a complete identity swap. The person in the final image should be clearly identifiable as the person from the 'Source Image'.
-
-3.  **Integration and Realism:**
-    *   **Adaptation:** The transplanted source face MUST be perfectly adapted to match the lighting, shadows, color grading, and head pose/angle of the target face.
-    *   **Blending:** The edges of the new face (jawline, hairline) must be flawlessly blended with the skin and hair of the target image.
-    *   **Preservation:** The rest of the 'Target Image' (background, body, clothing, hair) must remain absolutely identical to the original.
-
-4.  **Output:**
-    *   Return ONLY the final, photorealistically edited image. Do not output any text.`;
-
-    // Reordered parts: provide images first, then the prompt.
-    const parts = [
-        { text: "Source Image:" },
-        sourceImagePart,
-        { text: "Target Image:" },
-        targetImagePart,
-        { text: prompt },
-    ];
-    
-    const response: GenerateContentResponse = await ai.models.generateContent({
+    // 5. Make the API call with the parts in a logical order for this prompt.
+    const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
-        contents: { parts: parts },
+        contents: { parts: [targetImagePart, maskPart, croppedSourceFacePart, { text: prompt }] },
         config: {
-            safetySettings: safetySettings,
+            responseModalities: [Modality.IMAGE],
         },
     });
 
-    console.log('Received response from model for face swap.', response);
-    return handleApiResponse(response, 'face swap');
+    return extractImageDataUrl(response);
 };
 
 /**
- * Generates an upscaled image using generative AI.
- * @param originalImage The original image file.
- * @param scale The factor to upscale by (e.g., 2 for 2x).
- * @param detailIntensity The desired level of detail enhancement.
- * @param originalWidth The natural width of the original image.
- * @param originalHeight The natural height of the original image.
- * @returns A promise that resolves to the data URL of the upscaled image.
- */
-export const generateUpscaledImage = async (
-    originalImage: File,
-    scale: number,
-    detailIntensity: string,
-    originalWidth: number,
-    originalHeight: number,
-): Promise<string> => {
-    console.log(`Starting upscale generation: ${scale}x with ${detailIntensity} detail.`);
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
-    
-    const originalImagePart = await fileToPart(originalImage);
-
-    let detailInstruction = '';
-    switch (detailIntensity.toLowerCase()) {
-        case 'subtle':
-            detailInstruction = 'When reconstructing details, focus on clean lines and preserving the original texture as much as possible. Add only the minimum necessary new detail to achieve the target resolution.';
-            break;
-        case 'high':
-            detailInstruction = 'When reconstructing details, add a high amount of intricate, plausible new detail to enhance realism and texture, making the result look like it was originally captured with a high-resolution camera.';
-            break;
-        case 'natural':
-        default:
-            detailInstruction = 'When reconstructing details, add a natural amount of new detail, balancing enhancement with the original character of the image. The result should look realistic and not over-sharpened.';
-            break;
-    }
-
-    const targetWidth = Math.round(originalWidth * scale);
-    const targetHeight = Math.round(originalHeight * scale);
-    
-    const prompt = `You are an expert in AI image processing specializing in high-quality upscaling. Your task is to upscale the provided image to a target resolution of exactly ${targetWidth} by ${targetHeight} pixels, paying close attention to the requested detail intensity.
-
-Upscaling Guidelines:
-- Increase the resolution of the image to the target dimensions: ${targetWidth}x${targetHeight}.
-- ${detailInstruction}
-- Reduce any existing noise or compression artifacts where possible.
-- The final result must be a photorealistic, high-resolution version of the original image, free of AI-generated artifacts.
-
-Output: Return ONLY the final upscaled image. Do not return text.`;
-    const textPart = { text: prompt };
-
-    console.log(`Sending image and ${scale}x upscale prompt to the model (target: ${targetWidth}x${targetHeight})...`);
-    // FIX: Moved safetySettings into the config object.
-    const response: GenerateContentResponse = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
-        contents: { parts: [originalImagePart, textPart] },
-        config: {
-            safetySettings: safetySettings,
-        },
-    });
-    console.log('Received response from model for upscale.', response);
-    
-    return handleApiResponse(response, 'upscale');
-};
-
-/**
- * Restores an old or damaged photo using generative AI.
- * @param originalImage The original image file.
- * @returns A promise that resolves to the data URL of the restored image.
- */
-export const generateRestoredImage = async (
-    originalImage: File,
-): Promise<string> => {
-    console.log(`Starting photo restoration.`);
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
-    
-    const originalImagePart = await fileToPart(originalImage);
-    const prompt = `You are an expert in digital photo restoration. Your task is to restore the provided old, and potentially damaged, photo.
-
-Restoration Guidelines:
-- Repair any physical damage such as scratches, tears, and creases.
-- Remove digital noise, grain, and compression artifacts.
-- Enhance the clarity and sharpness of the image, bringing details into focus.
-- Improve color balance and correct fading. If the image is black and white, enhance its tonal range.
-- Do NOT colorize a black and white image unless specifically asked.
-- The goal is to create a clean, clear, and high-quality version of the original photo while preserving its authenticity. Do not add or remove any content or alter the subjects' appearances.
-
-Output: Return ONLY the final restored image. Do not return text.`;
-    const textPart = { text: prompt };
-
-    console.log('Sending image and restoration prompt to the model...');
-    // FIX: Moved safetySettings into the config object.
-    const response: GenerateContentResponse = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
-        contents: { parts: [originalImagePart, textPart] },
-        config: {
-            safetySettings: safetySettings,
-        },
-    });
-    console.log('Received response from model for restoration.', response);
-    
-    return handleApiResponse(response, 'restoration');
-};
-
-/**
- * Removes the background from an image using generative AI.
- * @param originalImage The original image file.
- * @returns A promise that resolves to the data URL of the image with a transparent background.
- */
-export const generateRemovedBackground = async (
-    originalImage: File,
-): Promise<string> => {
-    console.log(`Starting background removal.`);
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
-    
-    const originalImagePart = await fileToPart(originalImage);
-    const prompt = `You are an expert AI photo segmentation and masking tool. Your task is to perform a professional-quality background removal on the provided image, paying special attention to the quality of the edges.
-
-CRITICAL INSTRUCTIONS:
-1.  **Identify and Isolate Subject:** Perfectly identify the main subject(s) in the image.
-2.  **Transparent Background:** Remove the entire background, making it 100% transparent.
-3.  **Refine Edges (De-fringe):** This is the most important step. You MUST refine the edges of the subject to remove any color fringing or halo effects from the original background. The edges, especially around fine details like hair, fur, or fabric, should blend smoothly and naturally when placed on a new background. The semi-transparent pixels on the edges should contain the pure color of the subject, not a mix of the subject and the old background.
-4.  **Preserve Subject:** Do NOT alter the subject itself in any way (color, shape, texture).
-5.  **Output Format:** The final output MUST be a PNG image with a high-quality alpha channel for transparency. Do not add a solid color background.
-
-Return ONLY the final, edge-refined PNG image with a transparent background. Do not respond with text.`;
-    const textPart = { text: prompt };
-
-    console.log('Sending image and background removal prompt to the model...');
-    // FIX: Moved safetySettings into the config object.
-    const response: GenerateContentResponse = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
-        contents: { parts: [originalImagePart, textPart] },
-        config: {
-            safetySettings: safetySettings,
-        },
-    });
-    console.log('Received response from model for background removal.', response);
-    
-    return handleApiResponse(response, 'background removal');
-};
-
-/**
- * Automatically corrects the orientation of an image.
- * @param originalImage The original image file.
- * @returns A promise that resolves to the data URL of the correctly oriented image.
- */
-export const generateCorrectedOrientation = async (
-    originalImage: File,
-): Promise<string> => {
-    console.log(`Starting auto-orientation.`);
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
-    
-    const originalImagePart = await fileToPart(originalImage);
-    const prompt = `You are an expert photo editor AI. Your task is to analyze the provided image to determine its correct upright orientation. Rotate the image so that the main subject is oriented correctly (e.g., people are standing upright, horizons are level).
-
-Editing Guidelines:
-- Do not crop, resize, or make any other changes to the image content or quality.
-- The output image dimensions should be adjusted to reflect the rotation (e.g., a 1000x800 portrait image rotated 90 degrees should become 800x1000).
-
-Output: Return ONLY the final rotated image. Do not return text.`;
-    const textPart = { text: prompt };
-
-    console.log('Sending image and auto-rotate prompt to the model...');
-    // FIX: Moved safetySettings into the config object.
-    const response: GenerateContentResponse = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
-        contents: { parts: [originalImagePart, textPart] },
-        config: {
-            safetySettings: safetySettings,
-        },
-    });
-    console.log('Received response from model for auto-orientation.', response);
-    
-    return handleApiResponse(response, 'auto-orientation');
-};
-
-/**
- * Manually rotates an image 90 degrees.
- * @param originalImage The original image file.
- * @param direction The direction to rotate.
- * @returns A promise that resolves to the data URL of the rotated image.
- */
-export const generateRotatedImage = async (
-    originalImage: File,
-    direction: 'clockwise' | 'counter-clockwise'
-): Promise<string> => {
-    console.log(`Starting manual rotation: ${direction}`);
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
-    
-    const originalImagePart = await fileToPart(originalImage);
-    const prompt = `You are an expert photo editor AI. Your task is to rotate the entire image exactly 90 degrees ${direction}.
-
-Editing Guidelines:
-- Do not crop, resize, or make any other changes to the image content or quality.
-- The output image dimensions must be adjusted to reflect the rotation (e.g., a 1000x800 portrait image rotated 90 degrees should become 800x1000).
-
-Output: Return ONLY the final rotated image. Do not return text.`;
-    const textPart = { text: prompt };
-
-    console.log(`Sending image and rotate ${direction} prompt to the model...`);
-    // FIX: Moved safetySettings into the config object.
-    const response: GenerateContentResponse = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
-        contents: { parts: [originalImagePart, textPart] },
-        config: {
-            safetySettings: safetySettings,
-        },
-    });
-    console.log(`Received response from model for manual rotation.`, response);
-    
-    return handleApiResponse(response, 'manual rotation');
-};
-
-
-/**
- * Generates a zoomed and enhanced image using generative AI.
- * @param imageToZoom The cropped image file to be upscaled.
- * @param targetWidth The target width to upscale to (original image width).
- * @param targetHeight The target height to upscale to (original image height).
- * @param detailIntensity The desired level of detail enhancement.
- * @returns A promise that resolves to the data URL of the zoomed image.
- */
-export const generateZoomedImage = async (
-    imageToZoom: File,
-    targetWidth: number,
-    targetHeight: number,
-    detailIntensity: string
-): Promise<string> => {
-    console.log(`Starting AI Zoom generation to ${targetWidth}x${targetHeight} with ${detailIntensity} detail.`);
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
-    
-    const imagePart = await fileToPart(imageToZoom);
-    
-    let detailInstruction = '';
-    switch (detailIntensity.toLowerCase()) {
-        case 'subtle':
-            detailInstruction = 'Focus on clean lines and preserving the original texture as much as possible. Add only minimal necessary new detail to achieve the target resolution.';
-            break;
-        case 'high':
-            detailInstruction = 'Add a high amount of intricate, plausible new detail to enhance realism and texture, making the result look like a high-resolution photograph.';
-            break;
-        case 'natural':
-        default:
-            detailInstruction = 'Add a natural amount of new detail, balancing enhancement with the original character of the image.';
-            break;
-    }
-
-    const prompt = `You are an expert in AI image processing specializing in high-quality upscaling and detail reconstruction (super-resolution). Your task is to upscale the provided image to a target resolution of exactly ${targetWidth} by ${targetHeight} pixels.
-
-Upscaling Guidelines:
-- Intelligently enhance and reconstruct details to fill the new resolution. Do not just enlarge pixels.
-- ${detailInstruction}
-- The upscaled content should be photorealistic and blend seamlessly with the style of the source image.
-- Avoid introducing any AI-generated artifacts.
-- The final result must be a high-resolution version of the provided cropped image.
-
-Output: Return ONLY the final upscaled image. Do not return text.`;
-
-    const textPart = { text: prompt };
-
-    console.log(`Sending image and ${targetWidth}x${targetHeight} zoom prompt to the model...`);
-    // FIX: Moved safetySettings into the config object.
-    const response: GenerateContentResponse = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
-        contents: { parts: [imagePart, textPart] },
-        config: {
-            safetySettings: safetySettings,
-        },
-    });
-    console.log('Received response from model for AI zoom.', response);
-    
-    return handleApiResponse(response, 'AI zoom');
-};
-
-
-const getClosestAspectRatio = (width: number, height: number): "1:1" | "3:4" | "4:3" | "9:16" | "16:9" => {
-    const ratio = width / height;
-    const supportedRatios = {
-        "16:9": 16 / 9,
-        "9:16": 9 / 16,
-        "4:3": 4 / 3,
-        "3:4": 3 / 4,
-        "1:1": 1,
-    };
-
-    let closest = "1:1" as keyof typeof supportedRatios;
-    let minDiff = Math.abs(ratio - supportedRatios[closest]);
-
-    for (const key in supportedRatios) {
-        const ar = key as keyof typeof supportedRatios;
-        const diff = Math.abs(ratio - supportedRatios[ar]);
-        if (diff < minDiff) {
-            minDiff = diff;
-            closest = ar;
-        }
-    }
-    return closest;
-};
-
-/**
- * Generates a background image using generative AI.
- * @param prompt The text prompt describing the desired background.
- * @param width The width of the target canvas.
- * @param height The height of the target canvas.
- * @returns A promise that resolves to the data URL of the generated background.
- */
-export const generateBackgroundImage = async (
-    prompt: string,
-    width: number,
-    height: number
-): Promise<string> => {
-    console.log(`Starting background generation with prompt: ${prompt}`);
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
-
-    const aspectRatio = getClosestAspectRatio(width, height);
-    
-    console.log(`Generating image with aspect ratio: ${aspectRatio}`);
-
-    const response = await ai.models.generateImages({
-        model: 'imagen-4.0-generate-001',
-        prompt: `Generate a high-quality, photorealistic background image based on the following description. The image should be scenic and should not contain any prominent subjects or people, as it will be used as a background for another photo. Description: "${prompt}"`,
-        config: {
-          numberOfImages: 1,
-          outputMimeType: 'image/jpeg',
-          aspectRatio: aspectRatio,
-        },
-    });
-    console.log('Received response from image generation model.', response);
-
-    if (response.generatedImages && response.generatedImages.length > 0 && response.generatedImages[0].image.imageBytes) {
-        const base64ImageBytes: string = response.generatedImages[0].image.imageBytes;
-        return `data:image/jpeg;base64,${base64ImageBytes}`;
-    }
-    
-    throw new Error('AI model failed to generate a background image. Please try a different prompt.');
-};
-
-/**
- * Applies an edit style from an example pair to a new target image.
- * @param originalImage The original, unedited image file.
- * @param editedImage The final, edited image file that serves as the style example.
- * @param targetImage The new image to apply the transformation to.
- * @returns A promise that resolves to the data URL of the newly edited target image.
+ * Applies a style from an example edit to a new target image.
  */
 export const applyStyleByExample = async (
     originalImage: File,
     editedImage: File,
-    targetImage: File,
+    targetImage: File
 ): Promise<string> => {
-    console.log('Starting batch edit by example for:', targetImage.name);
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+    const originalImagePart = await fileToGenerativePart(originalImage);
+    const editedImagePart = await fileToGenerativePart(editedImage);
+    const targetImagePart = await fileToGenerativePart(targetImage);
 
-    const originalImagePart = await fileToPart(originalImage);
-    const editedImagePart = await fileToPart(editedImage);
-    const targetImagePart = await fileToPart(targetImage);
+    const prompt = `You are given three images: an original image, an edited version of that original, and a new target image. Your task is to analyze the style difference between the original and the edited image, and then apply that same stylistic transformation to the new target image. The style includes changes in color grading, contrast, lighting, and filters. Do not replicate content changes, only stylistic ones.
 
-    const prompt = `You are an expert photo editor AI. You will be given three images: 'Original Image', 'Edited Image', and 'Target Image'.
+- The first image is the 'Original'.
+- The second image is the 'Edited Example'.
+- The third image is the 'Target' to which you will apply the style.
 
-'Original Image' was edited by a user to become 'Edited Image'. Your task is to analyze the transformation that occurred between 'Original Image' and 'Edited Image'. This transformation could be a color grade, a filter, a brightness/contrast adjustment, or a combination of these.
+Return the modified 'Target' image.`;
 
-Once you have identified the transformation, apply the *exact same stylistic and tonal transformation* to the 'Target Image'.
-
-CRITICAL INSTRUCTIONS:
-- Do not copy any content from the 'Original Image' or 'Edited Image' onto the 'Target Image'.
-- Only replicate the *style* of the edit (e.g., the color grading, contrast change, filter effect).
-- The content and composition of the 'Target Image' must remain unchanged.
-- The output should be the transformed 'Target Image'.
-
-Output: Return ONLY the final edited image. Do not return text.`;
-
-    const parts = [
-        { text: "Original Image:" },
-        originalImagePart,
-        { text: "Edited Image:" },
-        editedImagePart,
-        { text: "Target Image:" },
-        targetImagePart,
-        { text: prompt },
-    ];
-
-    const response: GenerateContentResponse = await ai.models.generateContent({
+    const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
-        contents: { parts: parts },
+        contents: { parts: [originalImagePart, editedImagePart, targetImagePart, { text: prompt }] },
         config: {
-            safetySettings: safetySettings,
+            responseModalities: [Modality.IMAGE],
         },
     });
-    console.log('Received response from model for batch style transfer.', response);
-    
-    return handleApiResponse(response, 'style transfer');
+
+    return extractImageDataUrl(response);
 };
