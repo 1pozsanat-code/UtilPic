@@ -637,42 +637,32 @@ export const generateFaceSwap = async (
     const targetImagePart = await fileToPart(targetImage);
     const sourceImagePart = await fileToPart(sourceImage);
 
-    // Get target image dimensions
-    const { width: targetWidth, height: targetHeight } = await new Promise<{width: number, height: number}>((resolve, reject) => {
-        const img = new Image();
-        const url = URL.createObjectURL(targetImage);
-        img.onload = () => { resolve({ width: img.naturalWidth, height: img.naturalHeight }); URL.revokeObjectURL(url); };
-        img.onerror = (err) => { reject(err); URL.revokeObjectURL(url); };
-        img.src = url;
-    });
+    const prompt = `You are a professional digital artist AI specializing in photorealistic image composition.
+    
+Your task is to perform a high-quality face swap. You will be provided with two images: a 'Source Image' and a 'Target Image'.
 
-    const prompt = `You are an AI expert in photorealistic face swapping. Your single most important goal is to replace a face in a target image with a face from a source image, ensuring the identity is completely changed.
+**Instructions:**
+1.  **Identify Faces:**
+    *   In the 'Source Image', locate the face within the bounding box: {x: ${sourceFace.box.x.toFixed(4)}, y: ${sourceFace.box.y.toFixed(4)}, width: ${sourceFace.box.width.toFixed(4)}, height: ${sourceFace.box.height.toFixed(4)}}. This is the **source face**.
+    *   In the 'Target Image', locate the face within the bounding box: {x: ${targetFace.box.x.toFixed(4)}, y: ${targetFace.box.y.toFixed(4)}, width: ${targetFace.box.width.toFixed(4)}, height: ${targetFace.box.height.toFixed(4)}}. This is the **target face**.
 
-You will be given a 'Source Image' (containing the face to USE) and a 'Target Image' (the image to EDIT).
+2.  **Execute Swap:**
+    *   Take the entire **source face** and seamlessly integrate it onto the person in the 'Target Image', completely replacing the **target face**.
+    *   The primary goal is a complete identity swap. The person in the final image should be clearly identifiable as the person from the 'Source Image'.
 
-**Primary Goal: Perform a complete identity swap.**
+3.  **Integration and Realism:**
+    *   **Adaptation:** The transplanted source face MUST be perfectly adapted to match the lighting, shadows, color grading, and head pose/angle of the target face.
+    *   **Blending:** The edges of the new face (jawline, hairline) must be flawlessly blended with the skin and hair of the target image.
+    *   **Preservation:** The rest of the 'Target Image' (background, body, clothing, hair) must remain absolutely identical to the original.
 
--   **Source Face:** The face to take is located in the 'Source Image' within this bounding box (normalized): {x: ${sourceFace.box.x.toFixed(4)}, y: ${sourceFace.box.y.toFixed(4)}, width: ${sourceFace.box.width.toFixed(4)}, height: ${sourceFace.box.height.toFixed(4)}}
--   **Target Face:** The face to replace is located in the 'Target Image' within this bounding box (normalized): {x: ${targetFace.box.x.toFixed(4)}, y: ${targetFace.box.y.toFixed(4)}, width: ${targetFace.box.width.toFixed(4)}, height: ${targetFace.box.height.toFixed(4)}}
+4.  **Output:**
+    *   Return ONLY the final, photorealistically edited image. Do not output any text.`;
 
-**Execution Steps:**
-1.  **Identify Swap:** Identify the person in the Source Face bounding box. This is the new identity.
-2.  **Complete Replacement:** **Completely replace** the face in the Target Face bounding box with the new identity from the Source Face. The final image must clearly and unmistakably show the person from the Source Image. This is not a subtle blend or feature morph; it is a full replacement.
-3.  **Seamless Integration:** While replacing the face, you must perfectly adapt it to the 'Target Image's' context. This includes:
-    *   **Matching Head Pose:** Adjust the angle, rotation, and perspective of the new face to match the original head in the target image.
-    *   **Matching Lighting & Color:** Re-render the new face so its lighting, shadows, color temperature, and skin tone match the surrounding scene in the 'Target Image' perfectly.
-    *   **Flawless Blending:** Ensure the edges of the swapped face are blended seamlessly with the neck and hairline.
-4.  **Preserve Everything Else:** The rest of the 'Target Image' (hair, body, clothing, background) must remain absolutely unchanged and identical to the original 'Target Image'.
-5.  **Maintain Dimensions:** The output image MUST have the exact same dimensions as the original 'Target Image': ${targetWidth}x${targetHeight}.
-
-Safety & Ethics Policy: This tool is for creative editing. Do not use it to create misleading content. Do not alter perceived race or ethnicity.
-
-Output: Return ONLY the final edited image. Do not return text.`;
-
+    // Reordered parts: provide images first, then the prompt.
     const parts = [
-        { text: "Source Image (the face to use):" },
+        { text: "Source Image:" },
         sourceImagePart,
-        { text: "\n\nTarget Image (the scene to place the face into):" },
+        { text: "Target Image:" },
         targetImagePart,
         { text: prompt },
     ];
