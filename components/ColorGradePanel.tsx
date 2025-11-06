@@ -37,6 +37,7 @@ const ColorGradePanel: React.FC<ColorGradePanelProps> = ({ onApplyColorGrade, is
     { name: 'Faded Film', prompt: "Apply a nostalgic, faded film look. Mute the overall color saturation, lift the black point so there are no pure blacks (giving a slightly washed-out feel), and add a subtle, warm color cast to the entire image. The result should feel soft and reminiscent of old film stock.", description: 'Muted, soft colors with lifted blacks for a nostalgic feel.' },
     { name: 'Vintage Sepia', prompt: 'Apply a classic vintage sepia tone. Shift the entire color palette towards warm brown and yellow hues. Reduce the overall contrast for a faded, aged photograph look and add a very subtle film grain effect for authenticity.', description: 'A classic, warm, aged photograph effect.' },
     { name: 'Cyberpunk Neon', prompt: "Apply a vibrant cyberpunk neon color grade. Introduce bright, saturated magenta and cyan tones, especially into the highlights and artificial light sources. Deepen the shadows and give them a cool, dark blue tint to make the neon colors pop.", description: 'Vibrant magenta and cyan glows with dark shadows.' },
+    { name: 'Colorize B&W', prompt: 'Apply a color grade that realistically colorizes black and white photos, adding natural colors and vibrancy.', description: 'Brings black and white photos to life with realistic, AI-generated color.' },
   ];
   
   const handleApply = () => {
