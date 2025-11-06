@@ -6,7 +6,7 @@
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import ReactCrop, { type Crop, type PixelCrop } from 'react-image-crop';
-import { generateEditedImage, generateFilteredImage, generateAdjustedImage, generateUpscaledImage, generateRetouchedFace, generateRestoredImage, generateRemovedBackground, generateBackgroundImage, generateZoomedImage, analyzeImageForSuggestions, SuggestionAnalysis, generateColorGradedImage, generateSharpenedImage, generateCorrectedOrientation, generateGrainImage, generateRotatedImage, generateFaceSwap, type Face } from './services/geminiService.ts';
+import { generateEditedImage, generateFilteredImage, generateAdjustedImage, generateUpscaledImage, generateRetouchedFace, generateRestoredImage, generateRemovedBackground, generateBackgroundImage, generateZoomedImage, analyzeImageForSuggestions, SuggestionAnalysis, generateColorGradedImage, generateSharpenedImage, generateCorrectedOrientation, generateGrainImage, generateRotatedImage, generateFaceSwap, generateDoubleExposure, type Face } from './services/geminiService.ts';
 import { saveImageToHistoryDB, getAllHistoryImagesDB, clearHistoryDB, removeImagesFromHistoryDB } from './services/sessionDb.ts';
 import Header from './components/Header.tsx';
 import Spinner from './components/Spinner.tsx';
@@ -21,7 +21,8 @@ import WatermarkPanel, { type WatermarkSettings } from './components/WatermarkPa
 import BackgroundPanel, { type BackgroundSettings } from './components/BackgroundPanel.tsx';
 import OverlayPanel, { type OverlayLayer } from './components/OverlayPanel.tsx';
 import ZoomPanel from './components/ZoomPanel.tsx';
-import { UndoIcon, RedoIcon, EyeIcon, HistoryIcon, UserCircleIcon, PhotoIcon, SparklesIcon, SunIcon, EyeDropperIcon, ArrowUpOnSquareIcon, BullseyeIcon, PaletteIcon, MagicWandIcon, CropIcon, LayersIcon, MagnifyingGlassPlusIcon, WatermarkIcon, TuneIcon, MaskIcon, DocumentDuplicateIcon, SplitScreenIcon, FaceSwapIcon, PlusIcon, MinusIcon, FitScreenIcon } from './components/icons.tsx';
+import DoubleExposurePanel, { type DoubleExposureSettings } from './components/DoubleExposurePanel.tsx';
+import { UndoIcon, RedoIcon, EyeIcon, HistoryIcon, UserCircleIcon, PhotoIcon, SparklesIcon, SunIcon, EyeDropperIcon, ArrowUpOnSquareIcon, BullseyeIcon, PaletteIcon, MagicWandIcon, CropIcon, LayersIcon, MagnifyingGlassPlusIcon, WatermarkIcon, TuneIcon, MaskIcon, DocumentDuplicateIcon, SplitScreenIcon, FaceSwapIcon, PlusIcon, MinusIcon, FitScreenIcon, DoubleExposureIcon } from './components/icons.tsx';
 import StartScreen from './components/StartScreen.tsx';
 import RestoreSessionModal from './components/RestoreSessionModal.tsx';
 import DownloadModal, { type DownloadSettings } from './components/DownloadModal.tsx';
@@ -105,7 +106,7 @@ const createBlackAndWhiteMask = (redOverlayUrl: string, width: number, height: n
 };
 
 
-export type Tab = 'retouch' | 'face' | 'faceSwap' | 'adjust' | 'filters' | 'colorGrade' | 'crop' | 'background' | 'overlay' | 'upscale' | 'zoom' | 'restore' | 'watermark' | 'mask';
+export type Tab = 'retouch' | 'face' | 'faceSwap' | 'adjust' | 'filters' | 'colorGrade' | 'crop' | 'background' | 'overlay' | 'upscale' | 'zoom' | 'restore' | 'watermark' | 'mask' | 'doubleExposure';
 
 export type Suggestion = {
   id: string;
@@ -230,6 +231,7 @@ const tools = [
   { id: 'crop', label: 'Crop', icon: CropIcon },
   { id: 'background', label: 'Background', icon: EyeDropperIcon },
   { id: 'overlay', label: 'Overlay', icon: LayersIcon },
+  { id: 'doubleExposure', label: 'Double Exposure', icon: DoubleExposureIcon },
   { id: 'upscale', label: 'Upscale', icon: ArrowUpOnSquareIcon },
   { id: 'zoom', label: 'AI Zoom', icon: MagnifyingGlassPlusIcon },
   { id: 'restore', label: 'Restore', icon: SparklesIcon },
@@ -1101,6 +1103,27 @@ const App: React.FC = () => {
         setIsLoading(false);
     }
   }, [currentImageUrl, overlayLayers, addImageToHistory]);
+
+  const handleApplyDoubleExposure = useCallback(async (settings: DoubleExposureSettings) => {
+    if (!currentImage) {
+      setError('No base image loaded to apply the effect to.');
+      return;
+    }
+    
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+        const newImageUrl = await generateDoubleExposure(currentImage, settings.overlayFile, settings.blendMode, settings.opacity);
+        await addImageToHistory(newImageUrl);
+    } catch (err) {
+        const errorMessage = getErrorMessage(err);
+        setError(`Failed to apply double exposure. ${errorMessage}`);
+        console.error("Caught error in handleApplyDoubleExposure:", err);
+    } finally {
+        setIsLoading(false);
+    }
+  }, [currentImage, addImageToHistory]);
 
   const handleAddNewOverlay = (file: File) => {
       const newLayer: OverlayLayer = {
@@ -2211,6 +2234,11 @@ const App: React.FC = () => {
                     onApplyAll={handleApplyAllOverlays}
                     isLoading={isLoading} 
                 />
+                </div>
+
+                {/* Double Exposure Panel */}
+                <div className={`col-start-1 row-start-1 transition-all duration-300 ease-out ${activeTab === 'doubleExposure' ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-5 scale-[0.97] pointer-events-none'}`}>
+                    <DoubleExposurePanel onApply={handleApplyDoubleExposure} isLoading={isLoading} />
                 </div>
 
                 {/* Upscale Panel */}

@@ -342,6 +342,35 @@ export const generateZoomedImage = async (
     return applyFullImageEffect(croppedImage, prompt);
 };
 
+/**
+ * Creates a double exposure effect by blending two images.
+ */
+export const generateDoubleExposure = async (
+    baseImage: File,
+    overlayImage: File,
+    blendMode: string,
+    opacity: number
+): Promise<string> => {
+    const baseImagePart = await fileToGenerativePart(baseImage);
+    const overlayImagePart = await fileToGenerativePart(overlayImage);
+
+    const prompt = `Create a surreal and artistic double exposure effect.
+- The first image is the base image (e.g., a portrait or landscape).
+- The second image is the overlay image (e.g., a texture or another scene).
+Blend the overlay image onto the base image using a '${blendMode}' blend mode. The overlay image should have an approximate opacity of ${Math.round(opacity * 100)}%.
+The final result must be a seamless, high-quality, and aesthetically pleasing image that merges the two inputs creatively.`;
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        contents: { parts: [baseImagePart, overlayImagePart, { text: prompt }] },
+        config: {
+            responseModalities: [Modality.IMAGE],
+        },
+    });
+
+    return extractImageDataUrl(response);
+};
+
 // Helper to crop a face from an image and return a File
 const cropFace = async (imageFile: File, box: Face['box']): Promise<File> => {
     return new Promise((resolve, reject) => {
