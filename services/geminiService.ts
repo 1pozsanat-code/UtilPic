@@ -531,7 +531,14 @@ Return the modified 'Target' image.`;
 export const generateStyleFromReference = async (targetImage: File, styleReferenceImage: File): Promise<string> => {
     const targetImagePart = await fileToGenerativePart(targetImage);
     const styleImagePart = await fileToGenerativePart(styleReferenceImage);
-    const prompt = `Analyze the artistic style of the second image (the style reference). Apply this style, including its color palette, texture, lighting, and overall mood, to the first image (the target). The content and composition of the target image must be preserved.`;
+    const prompt = `You are an expert digital artist specializing in style transfer. Your task is to apply the artistic style of one image to another, while strictly preserving the content of the target image.
+
+- **First Image (Target):** This is the image whose content, subjects, and composition MUST be preserved.
+- **Second Image (Style Reference):** You will analyze this image to extract its artistic style only. This includes its color palette, lighting, texture, contrast, and overall mood.
+
+**Instruction:** Apply the style from the 'Style Reference' image to the 'Target' image.
+
+**CRITICAL RULE:** DO NOT transfer any objects, people, or structural elements from the 'Style Reference' to the 'Target'. The final image must contain ONLY the original content of the 'Target' image, but with the new artistic style.`;
 
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
