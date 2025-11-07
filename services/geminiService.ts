@@ -1,5 +1,3 @@
-
-
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -531,14 +529,14 @@ Return the modified 'Target' image.`;
 export const generateStyleFromReference = async (targetImage: File, styleReferenceImage: File): Promise<string> => {
     const targetImagePart = await fileToGenerativePart(targetImage);
     const styleImagePart = await fileToGenerativePart(styleReferenceImage);
-    const prompt = `You are an expert digital artist specializing in style transfer. Your task is to apply the artistic style of one image to another, while strictly preserving the content of the target image.
+    const prompt = `You are an expert style transfer AI. Your task is to apply the artistic style of the second image (the style reference) to the first image (the content image).
 
-- **First Image (Target):** This is the image whose content, subjects, and composition MUST be preserved. The style must be applied to the ENTIRETY of this image, from edge to edge.
-- **Second Image (Style Reference):** You will analyze this image to extract its artistic style only. This includes its color palette, lighting, texture, contrast, and overall mood. The dimensions of this reference image are irrelevant to the final output size.
+**CRITICAL INSTRUCTIONS:**
+1.  **KEEP THE CONTENT:** The final image must contain ONLY the objects, people, and scene from the **first image**. Do NOT include ANY content from the second image.
+2.  **TRANSFER THE STYLE:** The final image must have the colors, textures, lighting, and overall mood of the **second image**.
+3.  **MATCH THE SIZE:** The final image's dimensions (width and height) MUST be identical to the **first image**.
 
-**Instruction:** Apply the style from the 'Style Reference' image to the 'Target' image. The final output MUST have the exact same dimensions as the 'Target' image, with the style applied to the full frame.
-
-**CRITICAL RULE:** DO NOT transfer any objects, people, or structural elements from the 'Style Reference' to the 'Target'. The final image must contain ONLY the original content of the 'Target' image, but with the new artistic style applied across the entire canvas.`;
+Final output: A new image that looks like the first image was painted or photographed in the style of the second image. Do not blend the content of the two images.`;
 
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
