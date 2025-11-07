@@ -738,8 +738,36 @@ const App: React.FC = () => {
 
     try {
         const { naturalWidth, naturalHeight } = imgRef.current;
-        const upscaledImageUrl = await generateUpscaledImage(currentImage, scale, detailIntensity, naturalWidth, naturalHeight);
-        await addImageToHistory(upscaledImageUrl);
+        
+        // The AI will enhance details but might not change dimensions. The prompt guides it, but we'll enforce the final size.
+        const enhancedImageUrl = await generateUpscaledImage(currentImage, scale, detailIntensity, naturalWidth, naturalHeight);
+
+        // --- Client-side resizing to guarantee final dimensions ---
+        const image = new Image();
+        await new Promise<void>((resolve, reject) => {
+            image.onload = () => resolve();
+            image.onerror = (err) => reject(new Error('Failed to load the AI-enhanced image for resizing.'));
+            image.src = enhancedImageUrl;
+        });
+
+        const canvas = document.createElement('canvas');
+        const targetWidth = naturalWidth * scale;
+        const targetHeight = naturalHeight * scale;
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+            throw new Error('Could not get canvas context for final resizing.');
+        }
+        
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(image, 0, 0, targetWidth, targetHeight);
+
+        const finalDataUrl = canvas.toDataURL('image/png'); // Using PNG to preserve quality after upscale.
+        
+        await addImageToHistory(finalDataUrl);
+
     } catch (err) {
         const errorMessage = getErrorMessage(err);
         setError(`Failed to upscale the image. ${errorMessage}`);
