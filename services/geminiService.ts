@@ -524,3 +524,22 @@ Return the modified 'Target' image.`;
 
     return extractImageDataUrl(response);
 };
+
+/**
+ * Applies an artistic style from a reference image to a target image.
+ */
+export const generateStyleFromReference = async (targetImage: File, styleReferenceImage: File): Promise<string> => {
+    const targetImagePart = await fileToGenerativePart(targetImage);
+    const styleImagePart = await fileToGenerativePart(styleReferenceImage);
+    const prompt = `Analyze the artistic style of the second image (the style reference). Apply this style, including its color palette, texture, lighting, and overall mood, to the first image (the target). The content and composition of the target image must be preserved.`;
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        contents: { parts: [targetImagePart, styleImagePart, { text: prompt }] },
+        config: {
+            responseModalities: [Modality.IMAGE],
+        },
+    });
+
+    return extractImageDataUrl(response);
+};

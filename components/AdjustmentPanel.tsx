@@ -18,9 +18,10 @@ interface AdjustmentPanelProps {
   activePicker: ColorPickerType | null;
   onApplyLocalAdjustment: (prompt: string) => void;
   isAreaSelected: boolean;
+  onApplyStyleFromUrl: (url: string) => void;
 }
 
-const AdjustmentPanel: React.FC<AdjustmentPanelProps> = ({ onApplyAdjustment, onApplyAutoEnhance, onApplySharpen, onApplyGrain, isLoading, onSetActivePicker, activePicker, onApplyLocalAdjustment, isAreaSelected }) => {
+const AdjustmentPanel: React.FC<AdjustmentPanelProps> = ({ onApplyAdjustment, onApplyAutoEnhance, onApplySharpen, onApplyGrain, isLoading, onSetActivePicker, activePicker, onApplyLocalAdjustment, isAreaSelected, onApplyStyleFromUrl }) => {
   // State for sliders
   const [exposure, setExposure] = useState(0);
   const [brightness, setBrightness] = useState(0);
@@ -50,6 +51,7 @@ const AdjustmentPanel: React.FC<AdjustmentPanelProps> = ({ onApplyAdjustment, on
 
   // State for custom prompt
   const [customPrompt, setCustomPrompt] = useState('');
+  const [styleUrl, setStyleUrl] = useState('');
 
   const presets = [
     { name: 'Blur Background', prompt: 'Apply a realistic depth-of-field effect, making the background blurry while keeping the main subject in sharp focus.', description: 'Creates a "Portrait Mode" effect by blurring the background.' },
@@ -531,6 +533,25 @@ const AdjustmentPanel: React.FC<AdjustmentPanelProps> = ({ onApplyAdjustment, on
                   {style}
                 </button>
               ))}
+            </div>
+          </div>
+          <div className="space-y-2 bg-black/20 p-4 rounded-lg border border-gray-700/50">
+            <h3 className="text-lg font-semibold text-gray-300">Style Transfer from Image</h3>
+            <p className="text-xs text-gray-400 -mt-1">
+              Paste a direct image URL to apply its style to your photo. This works similarly to a Midjourney SREF.
+            </p>
+            <div className="flex items-center gap-2">
+              <input
+                type="url"
+                value={styleUrl}
+                onChange={(e) => setStyleUrl(e.target.value)}
+                placeholder="https://.../style-image.jpg"
+                className="flex-grow bg-gray-800 border border-gray-600 text-gray-200 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:outline-none transition w-full disabled:cursor-not-allowed disabled:opacity-60 text-sm"
+                disabled={isLoading}
+              />
+              <button onClick={() => onApplyStyleFromUrl(styleUrl)} disabled={isLoading || !styleUrl.trim()} className="bg-white/10 text-gray-200 font-semibold py-3 px-4 rounded-md transition-all hover:bg-white/20 active:scale-95 disabled:opacity-50 text-sm">
+                Apply
+              </button>
             </div>
           </div>
         </div>

@@ -6,7 +6,7 @@
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import ReactCrop, { type Crop, type PixelCrop } from 'react-image-crop';
-import { generateEditedImage, generateFilteredImage, generateAdjustedImage, generateUpscaledImage, generateRetouchedFace, generateRestoredImage, generateRemovedBackground, generateBackgroundImage, generateZoomedImage, analyzeImageForSuggestions, SuggestionAnalysis, generateColorGradedImage, generateSharpenedImage, generateCorrectedOrientation, generateGrainImage, generateRotatedImage, generateFaceSwap, generateDoubleExposure, type Face } from './services/geminiService.ts';
+import { generateEditedImage, generateFilteredImage, generateAdjustedImage, generateUpscaledImage, generateRetouchedFace, generateRestoredImage, generateRemovedBackground, generateBackgroundImage, generateZoomedImage, analyzeImageForSuggestions, SuggestionAnalysis, generateColorGradedImage, generateSharpenedImage, generateCorrectedOrientation, generateGrainImage, generateRotatedImage, generateFaceSwap, generateDoubleExposure, generateStyleFromReference, type Face } from './services/geminiService.ts';
 import { saveImageToHistoryDB, getAllHistoryImagesDB, clearHistoryDB, removeImagesFromHistoryDB } from './services/sessionDb.ts';
 import Header from './components/Header.tsx';
 import Spinner from './components/Spinner.tsx';
@@ -633,6 +633,31 @@ const App: React.FC = () => {
         const errorMessage = getErrorMessage(err);
         setError(`Failed to apply the adjustment. ${errorMessage}`);
         console.error("Caught error in handleApplyAdjustment:", err);
+    } finally {
+        setIsLoading(false);
+    }
+  }, [currentImage, addImageToHistory]);
+
+  const handleApplyStyleFromUrl = useCallback(async (styleUrl: string) => {
+    if (!currentImage) {
+        setError('No image loaded to apply a style to.');
+        return;
+    }
+    setIsLoading(true);
+    setError(null);
+    try {
+        // Fetch the image from the URL
+        const response = await fetch(styleUrl);
+        if (!response.ok) throw new Error(`Failed to fetch image from URL (status: ${response.status})`);
+        const blob = await response.blob();
+        const styleFile = new File([blob], 'style-reference.jpg', { type: blob.type });
+
+        const newImageUrl = await generateStyleFromReference(currentImage, styleFile);
+        await addImageToHistory(newImageUrl);
+    } catch (err) {
+        const errorMessage = getErrorMessage(err);
+        setError(`Failed to apply style from URL. ${errorMessage}. Please check the URL and ensure the server allows access (CORS policy).`);
+        console.error("Caught error in handleApplyStyleFromUrl:", err);
     } finally {
         setIsLoading(false);
     }
@@ -2230,6 +2255,7 @@ const App: React.FC = () => {
                     activePicker={activeColorPicker}
                     onApplyLocalAdjustment={handleApplyLocalAdjustment}
                     isAreaSelected={!!editHotspot || !!maskDataUrl}
+                    onApplyStyleFromUrl={handleApplyStyleFromUrl}
                 />
                 </div>
                 
