@@ -4,7 +4,7 @@
 */
 
 import React, { useState, useMemo } from 'react';
-import { EyedropperWBIcon, EyedropperWhiteIcon, EyedropperBlackIcon, SparklesIcon, SharpenIcon, GrainIcon } from './icons.tsx';
+import { EyedropperWBIcon, EyedropperWhiteIcon, EyedropperBlackIcon, SparklesIcon, SharpenIcon, GrainIcon, DocumentDuplicateIcon } from './icons.tsx';
 
 export type ColorPickerType = 'white' | 'black' | 'gray';
 
@@ -19,9 +19,10 @@ interface AdjustmentPanelProps {
   onApplyLocalAdjustment: (prompt: string) => void;
   isAreaSelected: boolean;
   onApplyStyleFromUrl: (url: string) => void;
+  onBatchApply: (prompt: string, name: string) => void;
 }
 
-const AdjustmentPanel: React.FC<AdjustmentPanelProps> = ({ onApplyAdjustment, onApplyAutoEnhance, onApplySharpen, onApplyGrain, isLoading, onSetActivePicker, activePicker, onApplyLocalAdjustment, isAreaSelected, onApplyStyleFromUrl }) => {
+const AdjustmentPanel: React.FC<AdjustmentPanelProps> = ({ onApplyAdjustment, onApplyAutoEnhance, onApplySharpen, onApplyGrain, isLoading, onSetActivePicker, activePicker, onApplyLocalAdjustment, isAreaSelected, onApplyStyleFromUrl, onBatchApply }) => {
   // State for sliders
   const [exposure, setExposure] = useState(0);
   const [brightness, setBrightness] = useState(0);
@@ -80,6 +81,12 @@ const AdjustmentPanel: React.FC<AdjustmentPanelProps> = ({ onApplyAdjustment, on
     }
   };
 
+  const handleCustomPromptBatch = () => {
+      if (customPrompt.trim() && !isLoading) {
+          onBatchApply(customPrompt, 'Custom Adjustment');
+      }
+  };
+
   const handleResetSliders = () => {
     setExposure(0);
     setBrightness(0);
@@ -96,9 +103,7 @@ const AdjustmentPanel: React.FC<AdjustmentPanelProps> = ({ onApplyAdjustment, on
     [exposure, brightness, contrast, highlights, shadows, saturation, temperature, blur]
   );
 
-  const handleApplySliders = () => {
-    if (isLoading || !isSliderChanged) return;
-
+  const getSliderPrompt = () => {
     const promptParts: string[] = [];
 
     if (exposure !== 0) promptParts.push(`adjust exposure by ${exposure > 0 ? '+' : ''}${exposure}`);
@@ -123,17 +128,30 @@ const AdjustmentPanel: React.FC<AdjustmentPanelProps> = ({ onApplyAdjustment, on
     } else if (blur < 0) {
       promptParts.push(`reduce blur (sharpen) with an intensity of ${Math.abs(blur)}`);
     }
-
+    
     if (promptParts.length > 0) {
-      // Capitalize the first letter of the first part.
-      promptParts[0] = promptParts[0].charAt(0).toUpperCase() + promptParts[0].slice(1);
-      
-      // Join them with commas and 'and' for the last one.
-      const prompt = promptParts.length > 1 
-          ? `${promptParts.slice(0, -1).join(', ')} and ${promptParts.slice(-1)}`
-          : `${promptParts[0]}`;
+        promptParts[0] = promptParts[0].charAt(0).toUpperCase() + promptParts[0].slice(1);
+        const prompt = promptParts.length > 1 
+            ? `${promptParts.slice(0, -1).join(', ')} and ${promptParts.slice(-1)}`
+            : `${promptParts[0]}`;
+        return `${prompt}.`;
+    }
+    return null;
+  };
 
-      onApplyAdjustment(`${prompt}.`);
+  const handleApplySliders = () => {
+    if (isLoading || !isSliderChanged) return;
+    const prompt = getSliderPrompt();
+    if (prompt) {
+        onApplyAdjustment(prompt);
+    }
+  };
+
+  const handleBatchSliders = () => {
+    if (isLoading || !isSliderChanged) return;
+    const prompt = getSliderPrompt();
+    if (prompt) {
+        onBatchApply(prompt, 'Manual Adjustment');
     }
   };
 
@@ -251,13 +269,23 @@ const AdjustmentPanel: React.FC<AdjustmentPanelProps> = ({ onApplyAdjustment, on
             ))}
           </div>
 
-           <button
-            onClick={handleApplySliders}
-            disabled={isLoading || !isSliderChanged}
-            className="w-full mt-2 bg-gradient-to-br from-blue-600 to-blue-500 text-white font-bold py-3 px-4 rounded-lg transition-all duration-200 ease-in-out shadow-md shadow-blue-500/20 hover:shadow-lg hover:shadow-blue-500/30 hover:-translate-y-px active:scale-95 active:shadow-inner text-base disabled:from-blue-800 disabled:to-blue-700 disabled:shadow-none disabled:cursor-not-allowed disabled:transform-none"
-          >
-            Apply Sliders
-          </button>
+           <div className="flex gap-2 mt-2">
+                <button
+                    onClick={handleApplySliders}
+                    disabled={isLoading || !isSliderChanged}
+                    className="flex-grow bg-gradient-to-br from-blue-600 to-blue-500 text-white font-bold py-3 px-4 rounded-lg transition-all duration-200 ease-in-out shadow-md shadow-blue-500/20 hover:shadow-lg hover:shadow-blue-500/30 hover:-translate-y-px active:scale-95 active:shadow-inner text-base disabled:from-blue-800 disabled:to-blue-700 disabled:shadow-none disabled:cursor-not-allowed disabled:transform-none"
+                >
+                    Apply Sliders
+                </button>
+                <button
+                    onClick={handleBatchSliders}
+                    disabled={isLoading || !isSliderChanged}
+                    className="flex-shrink-0 flex items-center justify-center gap-2 bg-white/10 text-gray-200 font-semibold py-3 px-4 rounded-lg transition-all duration-200 ease-in-out hover:bg-white/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Apply these settings to multiple images"
+                >
+                    <DocumentDuplicateIcon className="w-5 h-5" />
+                </button>
+           </div>
           
            {/* Color Balance Section */}
             <div className="space-y-4 pt-2">
@@ -406,6 +434,14 @@ const AdjustmentPanel: React.FC<AdjustmentPanelProps> = ({ onApplyAdjustment, on
               />
               <button onClick={handleCustomPromptApply} disabled={isLoading || !customPrompt.trim()} className="bg-white/10 text-gray-200 font-semibold py-3 px-4 rounded-md transition-all hover:bg-white/20 active:scale-95 disabled:opacity-50 text-sm">
                 Apply
+              </button>
+              <button
+                    onClick={handleCustomPromptBatch}
+                    disabled={isLoading || !customPrompt.trim()}
+                    className="flex-shrink-0 flex items-center justify-center gap-2 bg-white/10 text-gray-200 font-semibold py-3 px-4 rounded-lg transition-all duration-200 ease-in-out hover:bg-white/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Apply this custom adjustment to multiple images"
+              >
+                    <DocumentDuplicateIcon className="w-5 h-5" />
               </button>
           </div>
         </div>

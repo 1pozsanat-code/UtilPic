@@ -304,7 +304,7 @@ const App: React.FC = () => {
   const [isBgRemovalMode, setIsBgRemovalMode] = useState<boolean>(false);
   const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState<boolean>(false);
   const [isBatchPresetModalOpen, setIsBatchPresetModalOpen] = useState<boolean>(false);
-  const [batchPresetInfo, setBatchPresetInfo] = useState<{ name: string; prompt: string; type: 'filter' | 'colorGrade' } | null>(null);
+  const [batchPresetInfo, setBatchPresetInfo] = useState<{ name: string; prompt: string; type: 'filter' | 'colorGrade' | 'adjustment' } | null>(null);
   const [activeColorPicker, setActiveColorPicker] = useState<ColorPickerType | null>(null);
   const [maskDataUrl, setMaskDataUrl] = useState<string | null>(null);
 
@@ -1677,7 +1677,7 @@ const App: React.FC = () => {
     setActiveTab('retouch'); // Switch back to retouch to enter prompt
   }, []);
 
-  const handleOpenBatchPresetModal = useCallback((prompt: string, name:string, type: 'filter' | 'colorGrade') => {
+  const handleOpenBatchPresetModal = useCallback((prompt: string, name:string, type: 'filter' | 'colorGrade' | 'adjustment') => {
     setBatchPresetInfo({ prompt, name, type });
     setIsBatchPresetModalOpen(true);
   }, []);
@@ -2256,6 +2256,7 @@ const App: React.FC = () => {
                     onApplyLocalAdjustment={handleApplyLocalAdjustment}
                     isAreaSelected={!!editHotspot || !!maskDataUrl}
                     onApplyStyleFromUrl={handleApplyStyleFromUrl}
+                    onBatchApply={(prompt, name) => handleOpenBatchPresetModal(prompt, name, 'adjustment')}
                 />
                 </div>
                 

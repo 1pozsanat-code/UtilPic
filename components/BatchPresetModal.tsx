@@ -5,8 +5,8 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
 import JSZip from 'jszip';
-import { generateFilteredImage, generateColorGradedImage } from '../services/geminiService';
-import { CloseIcon, UploadIcon, PaletteIcon, TuneIcon } from './icons';
+import { generateFilteredImage, generateColorGradedImage, generateAdjustedImage } from '../services/geminiService';
+import { CloseIcon, UploadIcon, PaletteIcon, TuneIcon, SunIcon } from './icons';
 import Spinner from './Spinner';
 
 interface BatchPresetModalProps {
@@ -14,7 +14,7 @@ interface BatchPresetModalProps {
   onClose: () => void;
   presetName: string;
   presetPrompt: string;
-  presetType: 'filter' | 'colorGrade';
+  presetType: 'filter' | 'colorGrade' | 'adjustment';
 }
 
 type ProcessStatus = 'queued' | 'processing' | 'complete' | 'error';
@@ -81,7 +81,15 @@ const BatchPresetModal: React.FC<BatchPresetModalProps> = ({ isOpen, onClose, pr
     setProgress(0);
     
     let completed = 0;
-    const editFunction = presetType === 'filter' ? generateFilteredImage : generateColorGradedImage;
+    let editFunction;
+
+    if (presetType === 'filter') {
+        editFunction = generateFilteredImage;
+    } else if (presetType === 'colorGrade') {
+        editFunction = generateColorGradedImage;
+    } else {
+        editFunction = generateAdjustedImage;
+    }
     
     for (let i = 0; i < files.length; i++) {
         const currentFile = files[i];
@@ -134,7 +142,11 @@ const BatchPresetModal: React.FC<BatchPresetModalProps> = ({ isOpen, onClose, pr
   };
 
   const completedCount = files.filter(f => f.status === 'complete').length;
-  const PresetIcon = presetType === 'filter' ? PaletteIcon : TuneIcon;
+  
+  let PresetIcon;
+  if (presetType === 'filter') PresetIcon = PaletteIcon;
+  else if (presetType === 'colorGrade') PresetIcon = TuneIcon;
+  else PresetIcon = SunIcon;
 
   if (!isOpen) return null;
 
@@ -166,7 +178,7 @@ const BatchPresetModal: React.FC<BatchPresetModalProps> = ({ isOpen, onClose, pr
                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-gray-500">
                         <UploadIcon className="w-12 h-12" />
                         <p className="font-semibold text-lg">Drag & Drop Images Here</p>
-                        <p>The '{presetName}' {presetType} will be applied to all images.</p>
+                        <p>The '{presetName}' {presetType === 'colorGrade' ? 'color grade' : (presetType === 'adjustment' ? 'adjustment' : 'filter')} will be applied to all images.</p>
                         <label htmlFor="batch-preset-upload" className="bg-white/10 text-gray-200 font-semibold py-2 px-5 rounded-md transition-all hover:bg-white/20 active:scale-95 cursor-pointer mt-2">
                             Click to Upload
                         </label>
