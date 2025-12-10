@@ -1,3 +1,4 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -123,6 +124,15 @@ const AdjustmentPanel: React.FC<AdjustmentPanelProps> = ({ onApplyAdjustment, on
     if (!isLoading) {
       onApplyAdjustment(prompt);
     }
+  };
+  
+  const handleArtStyleClick = (style: string) => {
+      if (isLoading) return;
+      if (isAreaSelected) {
+          onApplyLocalAdjustment(`Intelligently identify the object (e.g., an item of clothing, a specific background element) located at the selected point. Apply the '${style}' art style ONLY to that entire object. The rest of the image MUST remain untouched. Blend the edges of the styled area seamlessly into the original image for a natural look.`);
+      } else {
+          onApplyAdjustment(`Transform this entire image into the style of '${style}' art. Maintain the original content but change the artistic rendering to match the characteristics of ${style}.`);
+      }
   };
 
   const handleCustomPromptApply = () => {
@@ -284,11 +294,10 @@ const AdjustmentPanel: React.FC<AdjustmentPanelProps> = ({ onApplyAdjustment, on
 
   return (
     <div className="w-full bg-gray-800/50 border border-gray-700 rounded-lg p-4 flex flex-col gap-6 animate-fade-in backdrop-blur-sm">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Sliders and custom prompt */}
         <div className="space-y-4 bg-black/20 p-4 rounded-lg border border-gray-700/50">
            <div className="flex justify-between items-center">
-            <h3 className="text-lg font-semibold text-gray-300">Light & Color</h3>
+            <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400">Light & Color</h3>
             <button
               onClick={handleResetSliders}
               disabled={isLoading || !isSliderChanged}
@@ -298,7 +307,7 @@ const AdjustmentPanel: React.FC<AdjustmentPanelProps> = ({ onApplyAdjustment, on
             </button>
            </div>
           {/* Slider Controls */}
-          <div className="space-y-3">
+          <div className="space-y-4">
             {[
               { label: 'Exposure', value: exposure, setter: setExposure },
               { label: 'Brightness', value: brightness, setter: setBrightness },
@@ -310,37 +319,38 @@ const AdjustmentPanel: React.FC<AdjustmentPanelProps> = ({ onApplyAdjustment, on
               { label: 'Blur', value: blur, setter: setBlur },
             ].map(({label, value, setter}) => (
               <div key={label}>
-                <div className="flex justify-between items-center text-sm mb-1">
-                    <label htmlFor={label} className="font-medium text-gray-400">{label}</label>
-                    <span className="text-gray-300 bg-gray-700/80 px-2 py-0.5 rounded-md">{value}</span>
+                <div className="flex justify-between items-center text-xs text-gray-400 mb-1">
+                    <label htmlFor={label} className="font-medium">{label}</label>
+                    <span className="text-gray-300 bg-gray-700/80 px-2 py-0.5 rounded">{value}</span>
                 </div>
-                <input id={label} type="range" min="-50" max="50" value={value} onChange={(e) => setter(Number(e.target.value))} className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer" disabled={isLoading} />
+                <input id={label} type="range" min="-50" max="50" value={value} onChange={(e) => setter(Number(e.target.value))} className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500" disabled={isLoading} />
               </div>
             ))}
           </div>
 
-           <div className="flex gap-2 mt-2">
+           <div className="flex gap-2 mt-4">
                 <button
                     onClick={handleApplySliders}
                     disabled={isLoading || !isSliderChanged}
-                    className="flex-grow bg-gradient-to-br from-blue-600 to-blue-500 text-white font-bold py-3 px-4 rounded-lg transition-all duration-200 ease-in-out shadow-md shadow-blue-500/20 hover:shadow-lg hover:shadow-blue-500/30 hover:-translate-y-px active:scale-95 active:shadow-inner text-base disabled:from-blue-800 disabled:to-blue-700 disabled:shadow-none disabled:cursor-not-allowed disabled:transform-none"
+                    className="flex-grow bg-gradient-to-br from-blue-600 to-blue-500 text-white font-bold py-3 px-4 rounded-lg transition-all shadow-md hover:shadow-blue-500/30 active:scale-95 disabled:from-gray-700 disabled:to-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                 >
                     Apply Sliders
                 </button>
                 <button
                     onClick={handleBatchSliders}
                     disabled={isLoading || !isSliderChanged}
-                    className="flex-shrink-0 flex items-center justify-center gap-2 bg-white/10 text-gray-200 font-semibold py-3 px-4 rounded-lg transition-all duration-200 ease-in-out hover:bg-white/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-shrink-0 flex items-center justify-center gap-2 bg-white/10 text-gray-200 font-semibold py-3 px-4 rounded-lg transition-all hover:bg-white/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                     title="Apply these settings to multiple images"
                 >
                     <DocumentDuplicateIcon className="w-5 h-5" />
                 </button>
            </div>
-          
+        </div>
+
            {/* Color Balance Section */}
-            <div className="space-y-4 pt-2">
+            <div className="space-y-4 bg-black/20 p-4 rounded-lg border border-gray-700/50">
                 <div className="flex justify-between items-center">
-                    <h3 className="text-lg font-semibold text-gray-300">Color Balance</h3>
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400">Color Balance</h3>
                     <button
                         onClick={handleResetColorBalance}
                         disabled={isLoading || !isColorBalanceChanged}
@@ -350,79 +360,46 @@ const AdjustmentPanel: React.FC<AdjustmentPanelProps> = ({ onApplyAdjustment, on
                     </button>
                 </div>
                 
-                {/* Highlights */}
-                <div className="space-y-2">
-                    <h4 className="text-sm font-medium text-gray-400">Highlights</h4>
-                    <div className="flex items-center gap-2">
-                        <span className="w-1.5 h-4 rounded-full bg-red-500/80"></span>
-                        <input type="range" min="-100" max="100" value={highlightsRed} onChange={(e) => setHighlightsRed(Number(e.target.value))} className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-red-500" disabled={isLoading} />
-                        <span className="text-gray-300 w-12 text-center bg-gray-700/80 px-2 py-0.5 rounded-md text-xs">{highlightsRed}</span>
-                    </div>
-                     <div className="flex items-center gap-2">
-                        <span className="w-1.5 h-4 rounded-full bg-green-500/80"></span>
-                        <input type="range" min="-100" max="100" value={highlightsGreen} onChange={(e) => setHighlightsGreen(Number(e.target.value))} className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-green-500" disabled={isLoading} />
-                        <span className="text-gray-300 w-12 text-center bg-gray-700/80 px-2 py-0.5 rounded-md text-xs">{highlightsGreen}</span>
-                    </div>
-                     <div className="flex items-center gap-2">
-                        <span className="w-1.5 h-4 rounded-full bg-blue-500/80"></span>
-                        <input type="range" min="-100" max="100" value={highlightsBlue} onChange={(e) => setHighlightsBlue(Number(e.target.value))} className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500" disabled={isLoading} />
-                        <span className="text-gray-300 w-12 text-center bg-gray-700/80 px-2 py-0.5 rounded-md text-xs">{highlightsBlue}</span>
-                    </div>
-                </div>
+                {['Highlights', 'Midtones', 'Shadows'].map((tone, idx) => {
+                    const redVal = idx === 0 ? highlightsRed : idx === 1 ? midtonesRed : shadowsRed;
+                    const greenVal = idx === 0 ? highlightsGreen : idx === 1 ? midtonesGreen : shadowsGreen;
+                    const blueVal = idx === 0 ? highlightsBlue : idx === 1 ? midtonesBlue : shadowsBlue;
+                    const setRed = idx === 0 ? setHighlightsRed : idx === 1 ? setMidtonesRed : setShadowsRed;
+                    const setGreen = idx === 0 ? setHighlightsGreen : idx === 1 ? setMidtonesGreen : setShadowsGreen;
+                    const setBlue = idx === 0 ? setHighlightsBlue : idx === 1 ? setMidtonesBlue : setShadowsBlue;
 
-                {/* Midtones */}
-                <div className="space-y-2">
-                    <h4 className="text-sm font-medium text-gray-400">Midtones</h4>
-                    <div className="flex items-center gap-2">
-                        <span className="w-1.5 h-4 rounded-full bg-red-500/80"></span>
-                        <input type="range" min="-100" max="100" value={midtonesRed} onChange={(e) => setMidtonesRed(Number(e.target.value))} className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-red-500" disabled={isLoading} />
-                        <span className="text-gray-300 w-12 text-center bg-gray-700/80 px-2 py-0.5 rounded-md text-xs">{midtonesRed}</span>
-                    </div>
-                     <div className="flex items-center gap-2">
-                        <span className="w-1.5 h-4 rounded-full bg-green-500/80"></span>
-                        <input type="range" min="-100" max="100" value={midtonesGreen} onChange={(e) => setMidtonesGreen(Number(e.target.value))} className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-green-500" disabled={isLoading} />
-                        <span className="text-gray-300 w-12 text-center bg-gray-700/80 px-2 py-0.5 rounded-md text-xs">{midtonesGreen}</span>
-                    </div>
-                     <div className="flex items-center gap-2">
-                        <span className="w-1.5 h-4 rounded-full bg-blue-500/80"></span>
-                        <input type="range" min="-100" max="100" value={midtonesBlue} onChange={(e) => setMidtonesBlue(Number(e.target.value))} className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500" disabled={isLoading} />
-                        <span className="text-gray-300 w-12 text-center bg-gray-700/80 px-2 py-0.5 rounded-md text-xs">{midtonesBlue}</span>
-                    </div>
-                </div>
-
-                {/* Shadows */}
-                <div className="space-y-2">
-                    <h4 className="text-sm font-medium text-gray-400">Shadows</h4>
-                    <div className="flex items-center gap-2">
-                        <span className="w-1.5 h-4 rounded-full bg-red-500/80"></span>
-                        <input type="range" min="-100" max="100" value={shadowsRed} onChange={(e) => setShadowsRed(Number(e.target.value))} className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-red-500" disabled={isLoading} />
-                        <span className="text-gray-300 w-12 text-center bg-gray-700/80 px-2 py-0.5 rounded-md text-xs">{shadowsRed}</span>
-                    </div>
-                     <div className="flex items-center gap-2">
-                        <span className="w-1.5 h-4 rounded-full bg-green-500/80"></span>
-                        <input type="range" min="-100" max="100" value={shadowsGreen} onChange={(e) => setShadowsGreen(Number(e.target.value))} className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-green-500" disabled={isLoading} />
-                        <span className="text-gray-300 w-12 text-center bg-gray-700/80 px-2 py-0.5 rounded-md text-xs">{shadowsGreen}</span>
-                    </div>
-                     <div className="flex items-center gap-2">
-                        <span className="w-1.5 h-4 rounded-full bg-blue-500/80"></span>
-                        <input type="range" min="-100" max="100" value={shadowsBlue} onChange={(e) => setShadowsBlue(Number(e.target.value))} className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500" disabled={isLoading} />
-                        <span className="text-gray-300 w-12 text-center bg-gray-700/80 px-2 py-0.5 rounded-md text-xs">{shadowsBlue}</span>
-                    </div>
-                </div>
+                    return (
+                        <div key={tone} className="space-y-2">
+                            <h4 className="text-xs font-medium text-gray-500 uppercase">{tone}</h4>
+                            <div className="flex items-center gap-2">
+                                <span className="w-1.5 h-3 rounded-full bg-red-500/80"></span>
+                                <input type="range" min="-100" max="100" value={redVal} onChange={(e) => setRed(Number(e.target.value))} className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-red-500" disabled={isLoading} />
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className="w-1.5 h-3 rounded-full bg-green-500/80"></span>
+                                <input type="range" min="-100" max="100" value={greenVal} onChange={(e) => setGreen(Number(e.target.value))} className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-green-500" disabled={isLoading} />
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className="w-1.5 h-3 rounded-full bg-blue-500/80"></span>
+                                <input type="range" min="-100" max="100" value={blueVal} onChange={(e) => setBlue(Number(e.target.value))} className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500" disabled={isLoading} />
+                            </div>
+                        </div>
+                    );
+                })}
 
                 <button
                     onClick={handleApplyColorBalance}
                     disabled={isLoading || !isColorBalanceChanged}
-                    className="w-full mt-2 bg-gradient-to-br from-blue-600 to-blue-500 text-white font-bold py-3 px-4 rounded-lg transition-all duration-200 ease-in-out shadow-md shadow-blue-500/20 hover:shadow-lg hover:shadow-blue-500/30 hover:-translate-y-px active:scale-95 active:shadow-inner text-base disabled:from-blue-800 disabled:to-blue-700 disabled:shadow-none disabled:cursor-not-allowed disabled:transform-none"
+                    className="w-full mt-2 bg-gradient-to-br from-blue-600 to-blue-500 text-white font-bold py-3 px-4 rounded-lg transition-all shadow-md hover:shadow-blue-500/30 active:scale-95 disabled:from-gray-700 disabled:to-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                 >
                     Apply Color Balance
                 </button>
             </div>
 
             {/* Vignette Section */}
-            <div className="space-y-4 pt-2">
+            <div className="space-y-4 bg-black/20 p-4 rounded-lg border border-gray-700/50">
                 <div className="flex justify-between items-center">
-                    <h3 className="text-lg font-semibold text-gray-300">Vignette</h3>
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400">Vignette</h3>
                     <button
                         onClick={handleResetVignette}
                         disabled={isLoading || vignetteAmount === 0}
@@ -431,79 +408,66 @@ const AdjustmentPanel: React.FC<AdjustmentPanelProps> = ({ onApplyAdjustment, on
                         Reset
                     </button>
                 </div>
-                {/* Amount Slider */}
-                <div>
-                    <div className="flex justify-between items-center text-sm mb-1">
-                        <label htmlFor="vignette-amount" className="font-medium text-gray-400">Amount</label>
-                        <span className="text-gray-300 bg-gray-700/80 px-2 py-0.5 rounded-md">{vignetteAmount}</span>
+                {[
+                    { label: 'Amount', value: vignetteAmount, setter: setVignetteAmount, min: -100 },
+                    { label: 'Size', value: vignetteSize, setter: setVignetteSize, min: 0 },
+                    { label: 'Feather', value: vignetteFeather, setter: setVignetteFeather, min: 0 },
+                ].map(({label, value, setter, min}) => (
+                    <div key={label}>
+                        <div className="flex justify-between items-center text-xs text-gray-400 mb-1">
+                            <label className="font-medium">{label}</label>
+                            <span className="text-gray-300 bg-gray-700/80 px-2 py-0.5 rounded">{value}</span>
+                        </div>
+                        <input type="range" min={min} max="100" value={value} onChange={(e) => setter(Number(e.target.value))} className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500" disabled={isLoading} />
                     </div>
-                    <input id="vignette-amount" type="range" min="-100" max="100" value={vignetteAmount} onChange={(e) => setVignetteAmount(Number(e.target.value))} className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer" disabled={isLoading} />
-                </div>
-                {/* Size Slider */}
-                <div>
-                    <div className="flex justify-between items-center text-sm mb-1">
-                        <label htmlFor="vignette-size" className="font-medium text-gray-400">Size</label>
-                        <span className="text-gray-300 bg-gray-700/80 px-2 py-0.5 rounded-md">{vignetteSize}</span>
-                    </div>
-                    <input id="vignette-size" type="range" min="0" max="100" value={vignetteSize} onChange={(e) => setVignetteSize(Number(e.target.value))} className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer" disabled={isLoading} />
-                </div>
-                {/* Feather Slider */}
-                <div>
-                    <div className="flex justify-between items-center text-sm mb-1">
-                        <label htmlFor="vignette-feather" className="font-medium text-gray-400">Feather</label>
-                        <span className="text-gray-300 bg-gray-700/80 px-2 py-0.5 rounded-md">{vignetteFeather}</span>
-                    </div>
-                    <input id="vignette-feather" type="range" min="0" max="100" value={vignetteFeather} onChange={(e) => setVignetteFeather(Number(e.target.value))} className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer" disabled={isLoading} />
-                </div>
+                ))}
+                
                 <button
                     onClick={handleApplyVignette}
                     disabled={isLoading || !isVignetteChanged}
-                    className="w-full mt-2 bg-gradient-to-br from-blue-600 to-blue-500 text-white font-bold py-3 px-4 rounded-lg transition-all duration-200 ease-in-out shadow-md shadow-blue-500/20 hover:shadow-lg hover:shadow-blue-500/30 hover:-translate-y-px active:scale-95 active:shadow-inner text-base disabled:from-blue-800 disabled:to-blue-700 disabled:shadow-none disabled:cursor-not-allowed disabled:transform-none"
+                    className="w-full mt-2 bg-gradient-to-br from-blue-600 to-blue-500 text-white font-bold py-3 px-4 rounded-lg transition-all shadow-md hover:shadow-blue-500/30 active:scale-95 disabled:from-gray-700 disabled:to-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                 >
                     Apply Vignette
                 </button>
             </div>
 
-          <div className="relative mt-4">
-            <div className="absolute inset-0 flex items-center" aria-hidden="true">
-              <div className="w-full border-t border-gray-600" />
-            </div>
-            <div className="relative flex justify-center">
-              <span className="bg-gray-800/50 px-2 text-sm text-gray-500 backdrop-blur-sm">Or</span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-              <input
-                type="text"
+          <div className="flex flex-col gap-2 mt-2">
+              <label className="text-sm font-bold uppercase tracking-wider text-gray-400">Custom Adjustment Prompt</label>
+              <textarea
                 value={customPrompt}
                 onChange={(e) => setCustomPrompt(e.target.value)}
-                placeholder="Describe a custom adjustment"
-                className="flex-grow bg-gray-800 border border-gray-600 text-gray-200 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:outline-none transition w-full disabled:cursor-not-allowed disabled:opacity-60 text-sm"
+                placeholder="Describe a custom adjustment (e.g. 'Make the lighting more dramatic', 'Remove the red tint')"
+                className="w-full bg-gray-900 border border-gray-600 text-gray-200 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:outline-none transition min-h-[100px] text-sm resize-y"
                 disabled={isLoading}
               />
-              <button onClick={handleCustomPromptApply} disabled={isLoading || !customPrompt.trim()} className="bg-white/10 text-gray-200 font-semibold py-3 px-4 rounded-md transition-all hover:bg-white/20 active:scale-95 disabled:opacity-50 text-sm">
-                Apply
-              </button>
-              <button
-                    onClick={handleCustomPromptBatch}
-                    disabled={isLoading || !customPrompt.trim()}
-                    className="flex-shrink-0 flex items-center justify-center gap-2 bg-white/10 text-gray-200 font-semibold py-3 px-4 rounded-lg transition-all duration-200 ease-in-out hover:bg-white/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Apply this custom adjustment to multiple images"
-              >
-                    <DocumentDuplicateIcon className="w-5 h-5" />
-              </button>
+              <div className="flex gap-2">
+                  <button 
+                    onClick={handleCustomPromptApply} 
+                    disabled={isLoading || !customPrompt.trim()} 
+                    className="flex-grow bg-white/10 text-gray-200 font-semibold py-3 px-4 rounded-lg transition-all hover:bg-white/20 active:scale-95 disabled:opacity-50 text-sm border border-gray-600"
+                  >
+                    Apply Custom
+                  </button>
+                  <button
+                        onClick={handleCustomPromptBatch}
+                        disabled={isLoading || !customPrompt.trim()}
+                        className="flex-shrink-0 flex items-center justify-center gap-2 bg-white/10 text-gray-200 font-semibold py-3 px-4 rounded-lg transition-all duration-200 ease-in-out hover:bg-white/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed border border-gray-600"
+                        title="Apply to Batch"
+                  >
+                        <DocumentDuplicateIcon className="w-5 h-5" />
+                  </button>
+              </div>
           </div>
-        </div>
+
 
         {/* Presets and Tools */}
-        <div className="space-y-4">
+        <div className="space-y-4 pt-4 border-t border-gray-700">
             <div className="space-y-2 bg-black/20 p-4 rounded-lg border border-gray-700/50">
-                <h3 className="text-lg font-semibold text-gray-300">Automatic Tools</h3>
+                <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400">Automatic Tools</h3>
                 <button
                     onClick={onApplyAutoEnhance}
                     disabled={isLoading}
-                    className="flex w-full items-center justify-center gap-2 text-center bg-white/10 text-gray-200 font-semibold py-3 px-4 rounded-md transition-all hover:bg-white/20 active:scale-95 disabled:opacity-50 text-base"
+                    className="flex w-full items-center justify-center gap-2 text-center bg-white/10 text-gray-200 font-semibold py-3 px-4 rounded-lg transition-all hover:bg-white/20 active:scale-95 disabled:opacity-50 text-sm"
                 >
                     <SparklesIcon className="w-5 h-5" />
                     Auto Enhance
@@ -511,40 +475,31 @@ const AdjustmentPanel: React.FC<AdjustmentPanelProps> = ({ onApplyAdjustment, on
             </div>
 
             <div className="space-y-2 bg-black/20 p-4 rounded-lg border border-gray-700/50">
-                <h3 className="text-lg font-semibold text-gray-300">Levels & White Balance</h3>
-                <p className="text-xs text-gray-400 -mt-1">Use eyedroppers to correct colors and tones.</p>
+                <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400">Levels & White Balance</h3>
+                <p className="text-xs text-gray-500 -mt-1">Use eyedroppers to pick reference colors.</p>
                 <div className="grid grid-cols-3 gap-2">
-                    <button
-                        onClick={() => onSetActivePicker('white')}
-                        disabled={isLoading}
-                        className={`flex flex-col items-center justify-center gap-1 text-center font-semibold py-2 px-2 rounded-md transition-all active:scale-95 disabled:opacity-50 text-xs ${activePicker === 'white' ? 'bg-blue-600 text-white ring-2 ring-offset-2 ring-offset-gray-800 ring-blue-500' : 'bg-white/10 text-gray-200 hover:bg-white/20'}`}
-                    >
-                        <EyedropperWhiteIcon className="w-5 h-5" />
-                        White Point
-                    </button>
-                    <button
-                        onClick={() => onSetActivePicker('gray')}
-                        disabled={isLoading}
-                        className={`flex flex-col items-center justify-center gap-1 text-center font-semibold py-2 px-2 rounded-md transition-all active:scale-95 disabled:opacity-50 text-xs ${activePicker === 'gray' ? 'bg-blue-600 text-white ring-2 ring-offset-2 ring-offset-gray-800 ring-blue-500' : 'bg-white/10 text-gray-200 hover:bg-white/20'}`}
-                    >
-                        <EyedropperWBIcon className="w-5 h-5" />
-                        Gray Point
-                    </button>
-                    <button
-                        onClick={() => onSetActivePicker('black')}
-                        disabled={isLoading}
-                        className={`flex flex-col items-center justify-center gap-1 text-center font-semibold py-2 px-2 rounded-md transition-all active:scale-95 disabled:opacity-50 text-xs ${activePicker === 'black' ? 'bg-blue-600 text-white ring-2 ring-offset-2 ring-offset-gray-800 ring-blue-500' : 'bg-white/10 text-gray-200 hover:bg-white/20'}`}
-                    >
-                        <EyedropperBlackIcon className="w-5 h-5" />
-                        Black Point
-                    </button>
+                    {[
+                        { picker: 'white', label: 'White Pt', icon: EyedropperWhiteIcon },
+                        { picker: 'gray', label: 'Gray Pt', icon: EyedropperWBIcon },
+                        { picker: 'black', label: 'Black Pt', icon: EyedropperBlackIcon },
+                    ].map(({picker, label, icon: Icon}) => (
+                        <button
+                            key={picker}
+                            onClick={() => onSetActivePicker(picker as ColorPickerType)}
+                            disabled={isLoading}
+                            className={`flex flex-col items-center justify-center gap-1 text-center font-semibold py-2 px-2 rounded-lg transition-all active:scale-95 disabled:opacity-50 text-xs ${activePicker === picker ? 'bg-blue-600 text-white ring-2 ring-offset-2 ring-offset-gray-800 ring-blue-500' : 'bg-white/10 text-gray-200 hover:bg-white/20'}`}
+                        >
+                            <Icon className="w-5 h-5" />
+                            {label}
+                        </button>
+                    ))}
                 </div>
             </div>
 
           <div className="space-y-2 bg-black/20 p-4 rounded-lg border border-gray-700/50">
             <div className="flex items-center gap-2">
               <SharpenIcon className="w-5 h-5 text-gray-400" />
-              <h3 className="text-lg font-semibold text-gray-300">AI Sharpen</h3>
+              <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400">AI Sharpen</h3>
             </div>
             <div className="grid grid-cols-3 gap-2">
                 {['Subtle', 'Natural', 'High'].map(intensity => (
@@ -552,7 +507,7 @@ const AdjustmentPanel: React.FC<AdjustmentPanelProps> = ({ onApplyAdjustment, on
                         key={intensity}
                         onClick={() => onApplySharpen(intensity)}
                         disabled={isLoading}
-                        className="text-center bg-white/10 text-gray-200 font-semibold py-3 px-2 rounded-md transition-all hover:bg-white/20 active:scale-95 disabled:opacity-50 text-sm"
+                        className="text-center bg-white/10 text-gray-200 font-semibold py-2 px-2 rounded-lg transition-all hover:bg-white/20 active:scale-95 disabled:opacity-50 text-xs"
                     >
                         {intensity}
                     </button>
@@ -563,7 +518,7 @@ const AdjustmentPanel: React.FC<AdjustmentPanelProps> = ({ onApplyAdjustment, on
           <div className="space-y-2 bg-black/20 p-4 rounded-lg border border-gray-700/50">
             <div className="flex items-center gap-2">
               <GrainIcon className="w-5 h-5 text-gray-400" />
-              <h3 className="text-lg font-semibold text-gray-300">AI Grain</h3>
+              <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400">AI Grain</h3>
             </div>
             <div className="grid grid-cols-3 gap-2">
                 {['Subtle', 'Medium', 'High'].map(intensity => (
@@ -571,7 +526,7 @@ const AdjustmentPanel: React.FC<AdjustmentPanelProps> = ({ onApplyAdjustment, on
                         key={intensity}
                         onClick={() => onApplyGrain(intensity)}
                         disabled={isLoading}
-                        className="text-center bg-white/10 text-gray-200 font-semibold py-3 px-2 rounded-md transition-all hover:bg-white/20 active:scale-95 disabled:opacity-50 text-sm"
+                        className="text-center bg-white/10 text-gray-200 font-semibold py-2 px-2 rounded-lg transition-all hover:bg-white/20 active:scale-95 disabled:opacity-50 text-xs"
                     >
                         {intensity}
                     </button>
@@ -580,20 +535,19 @@ const AdjustmentPanel: React.FC<AdjustmentPanelProps> = ({ onApplyAdjustment, on
           </div>
           
           <div className="space-y-2 bg-black/20 p-4 rounded-lg border border-gray-700/50">
-            <h3 className="text-lg font-semibold text-gray-300">Presets</h3>
-            <div className="grid grid-cols-1 gap-2">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400">Presets</h3>
+            <div className="flex flex-col gap-2">
                 {presets.map(preset => (
                 <div key={preset.name} className="relative group">
                     <button
                         onClick={() => handlePresetClick(preset.prompt)}
                         disabled={isLoading}
-                        className="w-full text-left bg-white/5 text-gray-300 font-medium py-3 px-4 rounded-md transition-all hover:bg-white/10 active:scale-[0.98] disabled:opacity-50 text-base"
+                        className="w-full text-left bg-white/5 text-gray-300 font-medium py-3 px-4 rounded-lg transition-all hover:bg-white/10 active:scale-[0.98] disabled:opacity-50 text-sm border border-transparent hover:border-gray-600"
                     >
                         {preset.name}
                     </button>
-                     <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 w-max max-w-xs px-3 py-2 bg-gray-900 text-white text-sm rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10 shadow-lg">
+                     <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 w-max max-w-xs px-3 py-2 bg-gray-900 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10 shadow-lg">
                         {preset.description}
-                        <div className="absolute top-1/2 -translate-y-1/2 right-full w-0 h-0 border-y-4 border-y-transparent border-r-4 border-r-gray-900"></div>
                     </div>
                 </div>
                 ))}
@@ -601,19 +555,19 @@ const AdjustmentPanel: React.FC<AdjustmentPanelProps> = ({ onApplyAdjustment, on
           </div>
 
            <div className="space-y-2 bg-black/20 p-4 rounded-lg border border-gray-700/50">
-            <h3 className="text-lg font-semibold text-gray-300">Art Style Presets</h3>
-            <p className="text-xs text-gray-400 -mt-1">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400">Art Style Presets</h3>
+            <p className="text-xs text-gray-500 -mt-1">
               {isAreaSelected
                 ? "Applies the selected style to the selected area."
-                : "Click on the image to select an area, or use the Mask tool."}
+                : "Applies the selected style to the entire image."}
             </p>
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               {artStyles.map(style => (
                 <button
                   key={style}
-                  onClick={() => onApplyLocalAdjustment(`Intelligently identify the object (e.g., an item of clothing, a specific background element) located at the selected point. Apply the '${style}' art style ONLY to that entire object. The rest of the image MUST remain untouched. Blend the edges of the styled area seamlessly into the original image for a natural look.`)}
-                  disabled={isLoading || !isAreaSelected}
-                  className="text-center bg-white/5 text-gray-300 font-medium py-2 px-2 rounded-md transition-all hover:bg-white/10 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed text-xs"
+                  onClick={() => handleArtStyleClick(style)}
+                  disabled={isLoading}
+                  className="text-center bg-white/5 text-gray-300 font-medium py-2 px-2 rounded-lg transition-all hover:bg-white/10 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed text-xs border border-transparent hover:border-gray-600"
                   title={`Apply ${style} style`}
                 >
                   {style}
@@ -622,26 +576,25 @@ const AdjustmentPanel: React.FC<AdjustmentPanelProps> = ({ onApplyAdjustment, on
             </div>
           </div>
           <div className="space-y-2 bg-black/20 p-4 rounded-lg border border-gray-700/50">
-            <h3 className="text-lg font-semibold text-gray-300">Style Transfer from Image</h3>
-            <p className="text-xs text-gray-400 -mt-1">
-              Paste a direct image URL to apply its style to your photo. This works similarly to a Midjourney SREF.
+            <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400">Style Transfer</h3>
+            <p className="text-xs text-gray-500 -mt-1">
+              Paste an image URL to apply its style.
             </p>
             <div className="flex items-center gap-2">
               <input
                 type="url"
                 value={styleUrl}
                 onChange={(e) => setStyleUrl(e.target.value)}
-                placeholder="https://.../style-image.jpg"
-                className="flex-grow bg-gray-800 border border-gray-600 text-gray-200 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:outline-none transition w-full disabled:cursor-not-allowed disabled:opacity-60 text-sm"
+                placeholder="https://example.com/image.jpg"
+                className="flex-grow bg-gray-900 border border-gray-600 text-gray-200 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:outline-none transition w-full disabled:cursor-not-allowed disabled:opacity-60 text-xs"
                 disabled={isLoading}
               />
-              <button onClick={() => onApplyStyleFromUrl(styleUrl)} disabled={isLoading || !styleUrl.trim()} className="bg-white/10 text-gray-200 font-semibold py-3 px-4 rounded-md transition-all hover:bg-white/20 active:scale-95 disabled:opacity-50 text-sm">
+              <button onClick={() => onApplyStyleFromUrl(styleUrl)} disabled={isLoading || !styleUrl.trim()} className="bg-white/10 text-gray-200 font-semibold py-3 px-4 rounded-lg transition-all hover:bg-white/20 active:scale-95 disabled:opacity-50 text-xs border border-gray-600">
                 Apply
               </button>
             </div>
           </div>
         </div>
-      </div>
     </div>
   );
 };
