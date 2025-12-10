@@ -2153,7 +2153,7 @@ const App: React.FC = () => {
 
 
     return (
-      <div className="w-full h-[calc(100vh-6rem)] flex flex-col lg:flex-row gap-4 animate-fade-in overflow-hidden">
+      <div className="w-full h-full flex flex-col lg:flex-row gap-4 animate-fade-in overflow-hidden">
         {/* Sidebar Navigation */}
         <nav className="flex-shrink-0 flex flex-row lg:flex-col gap-2 bg-gray-800/80 border border-gray-700/80 rounded-lg p-2 backdrop-blur-sm overflow-x-auto lg:overflow-y-auto lg:w-24 custom-scrollbar z-20">
             {tools.map(tool => (
@@ -2174,7 +2174,7 @@ const App: React.FC = () => {
         </nav>
 
         {/* Center: Image & Canvas */}
-        <div className="flex-grow flex flex-col min-w-0 h-full bg-gray-900/30 rounded-xl border border-gray-700/30 overflow-hidden relative group">
+        <div className="flex-grow flex flex-col min-w-0 min-h-0 bg-gray-900/30 rounded-xl border border-gray-700/30 overflow-hidden relative group">
             {/* Main Image Area */}
             <div className="flex-grow relative w-full h-full overflow-hidden flex items-center justify-center bg-black/20">
                 {isLoading && (
@@ -2271,7 +2271,7 @@ const App: React.FC = () => {
         </div>
 
         {/* Right: Tools Panel */}
-        <div className="w-full lg:w-[400px] flex-shrink-0 flex flex-col h-full bg-gray-900/50 border border-gray-700/50 rounded-xl overflow-hidden backdrop-blur-sm">
+        <div className="w-full lg:w-[400px] flex-shrink-0 flex flex-col h-[40vh] lg:h-full bg-gray-900/50 border border-gray-700/50 rounded-xl overflow-hidden backdrop-blur-sm">
              <div className="flex-grow overflow-y-auto custom-scrollbar p-4 flex flex-col gap-4">
                  {/* Suggestions */}
                  {showSuggestions && suggestions.length > 0 && (
@@ -2454,61 +2454,4 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen text-gray-100 flex flex-col h-screen overflow-hidden">
-      {sessionToRestore && (
-        <RestoreSessionModal 
-            onRestore={handleRestoreSession} 
-            onStartNew={handleStartNewSession} 
-        />
-      )}
-      {isDownloadModalOpen && currentImage && (
-        <DownloadModal 
-            isOpen={isDownloadModalOpen}
-            onClose={() => setIsDownloadModalOpen(false)}
-            onConfirm={handleConfirmDownload}
-            imageFile={currentImage}
-        />
-      )}
-      {isHistoryPanelOpen && currentImageUrl && (
-        <HistoryPanel
-          history={history}
-          currentIndex={historyIndex}
-          onSelectHistory={handleHistorySelect}
-          onClose={() => setIsHistoryPanelOpen(false)}
-        />
-      )}
-      {isBatchEditModalOpen && originalImage && currentImage && (
-        <BatchEditModal
-          isOpen={isBatchEditModalOpen}
-          onClose={() => setIsBatchEditModalOpen(false)}
-          originalImage={originalImage}
-          editedImage={currentImage}
-        />
-      )}
-      {isBatchPresetModalOpen && batchPresetInfo && (
-        <BatchPresetModal
-          isOpen={isBatchPresetModalOpen}
-          onClose={() => setIsBatchPresetModalOpen(false)}
-          presetName={batchPresetInfo.name}
-          presetPrompt={batchPresetInfo.prompt}
-          presetType={batchPresetInfo.type}
-        />
-      )}
-      {currentImageUrl && (
-        <MaskEditor
-            isOpen={activeTab === 'mask'}
-            onClose={() => setActiveTab('retouch')}
-            onApplyMask={handleApplyMask}
-            baseImageSrc={currentImageUrl}
-        />
-      )}
-      <Header />
-      {/* Main Container */}
-      <main className="flex-grow w-full max-w-[1920px] mx-auto p-2 md:p-4 overflow-hidden relative">
-        {!sessionToRestore && renderContent()}
-      </main>
-    </div>
-  );
-};
-
-export default App;
+    
