@@ -6,7 +6,6 @@
 import { GoogleGenAI, Modality, Type, type GenerateContentResponse } from '@google/genai';
 
 // Initialize the Gemini client
-// FIX: Correctly initialize GoogleGenAI with a named apiKey parameter.
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 // Helper to convert a File to a GenerativePart
@@ -178,9 +177,9 @@ export const generateSegmentationMask = async (image: File, subject: 'sky' | 'su
     
     let prompt = "";
     if (subject === 'sky') {
-        prompt = "Generate a pixel-perfect, high-contrast binary mask where the sky is pure white (255) and everything else (ground, buildings, trees, mountains) is pure black (0). Ensure pixel-perfect edge detection along the horizon and intricate details like tree branches or skylines. The output must be strictly black and white with no gray areas.";
+        prompt = "Create a high-contrast binary mask where the sky is WHITE and everything else is BLACK. The selection must be pixel-perfect, accurately tracing the horizon, buildings, trees, and gaps between branches. There should be no gray areas; strictly black and white.";
     } else {
-        prompt = "Generate a pixel-perfect, high-contrast binary mask where the main subject(s) (people, animals, or foreground objects) are pure white (255) and the background is pure black (0). Focus on exact boundaries, especially around hair, clothing, and complex contours. The output must be strictly black and white with no gray areas.";
+        prompt = "Create a high-contrast binary mask where the main subject(s) are WHITE and the background is BLACK. The selection must be pixel-perfect, accurately handling hair, clothing edges, and complex shapes. There should be no gray areas; strictly black and white.";
     }
 
     const response = await ai.models.generateContent({
@@ -213,7 +212,7 @@ export const generateEditedImage = async (
         // The mask is expected to be black and white. White is the area to edit.
         const maskPart = await fileToGenerativePart(mask);
         parts.push(maskPart);
-        fullPrompt += ` The provided mask indicates the area to apply the edit to. The changes should be confined to the white region of the mask and blend naturally at the edges.`;
+        fullPrompt += ` The provided image is a mask indicating the area to edit (white pixels = edit area). Apply the changes ONLY to the white region of the mask. The rest of the image must remain exactly the same.`;
     }
 
     parts.push({ text: fullPrompt });

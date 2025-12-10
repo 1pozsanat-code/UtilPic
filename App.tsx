@@ -1946,203 +1946,21 @@ const App: React.FC = () => {
   const handleSetActivePicker = (picker: ColorPickerType | null) => {
       setActiveColorPicker(current => (current === picker ? null : picker));
   };
-
-  const renderContent = () => {
-    if (error) {
-       const isSafetyError = error.includes("Generative AI Prohibited Use Policy");
-       return (
-           <div className="text-center animate-fade-in bg-red-500/10 border border-red-500/20 p-8 rounded-lg max-w-2xl mx-auto flex flex-col items-center gap-4 mt-12">
-            <h2 className="text-2xl font-bold text-red-300">An Error Occurred</h2>
-            <p className="text-md text-red-400">
-                {isSafetyError ? (
-                    <>
-                        Your request was blocked due to safety policies, which can be triggered by the image or your text prompt. Please try a different image or a more direct prompt. You can learn more by reading Google's <a href="https://policies.google.com/terms/generative-ai/use-policy" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline hover:text-blue-300">Generative AI Prohibited Use Policy</a>.
-                    </>
-                ) : (
-                    error
-                )}
-            </p>
-            <button
-                onClick={() => setError(null)}
-                className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-6 rounded-lg text-md transition-colors"
-              >
-                Try Again
-            </button>
-          </div>
-        );
-    }
-    
-    if (!currentImageUrl) {
-      return <StartScreen onFileSelect={handleFileSelect} />;
-    }
-
-    const imageDisplay = (
-      <div
-        ref={imageContainerRef}
-        className="relative w-full h-full"
-        style={{ cursor: isSplitView ? 'default' : cursorStyle }}
-        onWheel={handleWheel}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerLeave={() => {
-            setIsPanning(false);
-            setIsDragging(false);
-            setIsDraggingHotspot(false);
-            isDraggingSplitter.current = false;
-        }}
-      >
-        {isSplitView ? (
-             <>
-                {/* Base Image (Current Edit) */}
-                <img
-                    ref={imgRef}
-                    key={`current-split-${currentImageUrl}`}
-                    src={currentImageUrl}
-                    alt="Current"
-                    className="absolute inset-0 w-full h-full object-contain pointer-events-none"
-                    style={{ filter: previewFilter }}
-                />
-                {/* Clipped Original Image */}
-                <div 
-                    className="absolute inset-0 w-full h-full"
-                    style={{ clipPath: `inset(0 ${100 - splitPosition}% 0 0)`}}
-                >
-                    <img
-                        key={`original-split-${originalImageUrl}`}
-                        src={originalImageUrl}
-                        alt="Original"
-                        className="absolute inset-0 w-full h-full object-contain pointer-events-none"
-                    />
-                </div>
-                {/* Splitter Handle */}
-                <div
-                    className="absolute top-0 bottom-0 w-1 bg-white/75 cursor-ew-resize group z-10 flex items-center"
-                    style={{ left: `calc(${splitPosition}%)`, transform: 'translateX(-50%)' }}
-                    onPointerDown={handleSplitterPointerDown}
-                >
-                    <div className="absolute top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/90 shadow-lg flex items-center justify-center text-gray-600 group-hover:scale-110 transition-transform">
-                        <svg className="w-4 h-4 rotate-90" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M8 9l4-4 4 4m0 6l-4 4-4-4" /></svg>
-                    </div>
-                </div>
-            </>
-        ) : (
-            <div
-                className="w-full h-full"
-                style={{ 
-                    transform: `translate(${viewTransform.pan.x}px, ${viewTransform.pan.y}px) scale(${viewTransform.scale})`,
-                    transition: isPanning || isDraggingHotspot ? 'none' : 'transform 0.1s ease-out',
-                }}
-            >
-                {/* Base image is the original, always at the bottom */}
-                {originalImageUrl && (
-                    <img
-                        key={originalImageUrl}
-                        src={originalImageUrl}
-                        alt="Original"
-                        className="absolute inset-0 w-full h-full object-contain pointer-events-none"
-                        loading="lazy"
-                    />
-                )}
-                {/* The current image is an overlay that fades in/out for comparison */}
-                <img
-                    ref={imgRef}
-                    key={currentImageUrl}
-                    src={currentImageUrl}
-                    alt="Current"
-                    onLoad={onImageLoad}
-                    className={`absolute inset-0 w-full h-full object-contain transition-opacity duration-200 ease-in-out animate-image-update ${isComparing ? 'opacity-0' : 'opacity-100'}`}
-                    style={{ filter: previewFilter }}
-                    loading="lazy"
-                />
-                {/* Mask Overlay */}
-                {maskDataUrl && (
-                    <img
-                        src={maskDataUrl}
-                        alt="Active mask"
-                        className="absolute inset-0 w-full h-full object-contain pointer-events-none"
-                    />
-                )}
-                {/* Face Detection Bounding Boxes */}
-                {activeTab === 'face' && detectedFaces.length > 0 && (
-                    <div className="absolute inset-0 w-full h-full pointer-events-none overflow-hidden">
-                        {detectedFaces.map((face, index) => {
-                            const isSelected = selectedFaces.some(sf => JSON.stringify(sf.box) === JSON.stringify(face.box));
-                            const { x, y, width, height } = face.box;
-
-                            return (
-                                <div
-                                    key={index}
-                                    className={`absolute transition-all duration-200 border-2 rounded-md ${isSelected ? 'border-blue-400 bg-blue-400/20 shadow-lg' : 'border-white/50 border-dashed'}`}
-                                    style={{
-                                        left: `${x * 100}%`,
-                                        top: `${y * 100}%`,
-                                        width: `${width * 100}%`,
-                                        height: `${height * 100}%`,
-                                    }}
-                                />
-                            );
-                        })}
-                    </div>
-                )}
-                {/* Overlays Live Preview */}
-                {activeTab === 'overlay' && (
-                    <div className="absolute inset-0 w-full h-full pointer-events-none overflow-hidden">
-                    {overlayLayers.map(layer => {
-                        if (!layer.isVisible) return null;
-                        
-                        const styles: React.CSSProperties = {
-                            position: 'absolute',
-                            opacity: layer.opacity,
-                            width: `${layer.size}%`,
-                            height: 'auto',
-                            top: `${layer.position.y}%`,
-                            left: `${layer.position.x}%`,
-                            mixBlendMode: layer.blendMode,
-                        };
-
-                        return (
-                            <img
-                                key={layer.id}
-                                src={layer.previewUrl}
-                                alt={layer.name}
-                                style={styles}
-                                className="pointer-events-none"
-                            />
-                        );
-                    })}
-                    </div>
-                )}
-            </div>
-        )}
-        {!isSplitView && displayHotspot && !isLoading && (activeTab === 'retouch' || activeTab === 'adjust' || activeTab === 'zoom') && !maskDataUrl && (
-            <div 
-                className="absolute -translate-x-1/2 -translate-y-1/2 z-10 animate-hotspot-appear"
-                style={{ 
-                    left: `${displayHotspot.x}px`, 
-                    top: `${displayHotspot.y}px`,
-                    cursor: isDraggingHotspot ? 'grabbing' : 'grab',
-                }}
-                onPointerDown={handleHotspotPointerDown}
-            >
-                <div className="relative flex justify-center items-center w-16 h-16">
-                    <div className="absolute w-full h-full rounded-full border-2 border-blue-400 animate-spin-slow"></div>
-                    <div className="absolute w-[80%] h-[80%] rounded-full border-2 border-dashed border-white/50 animate-spin-reverse-slow"></div>
-                    <div className="relative inline-flex rounded-full h-3 w-3 bg-cyan-400 shadow-[0_0_10px_3px_rgba(56,189,248,0.7)]"></div>
-                    <div className="absolute w-full h-px bg-blue-400/50"></div>
-                    <div className="absolute h-full w-px bg-blue-400/50"></div>
-                </div>
-            </div>
-        )}
-      </div>
+  
+  if (isLoadingSession) {
+    return (
+        <div className="min-h-screen text-gray-100 flex flex-col items-center justify-center">
+             <Spinner />
+        </div>
     );
-    
-    // For ReactCrop, we need a single image element.
+  }
+
+    // ReactCrop setup for crop image display
     const cropImageElement = (
       <img 
         ref={imgRef}
         key={`crop-${currentImageUrl}`}
-        src={currentImageUrl} 
+        src={currentImageUrl || ''} 
         onLoad={onImageLoad}
         alt="Crop this image"
         className="w-full h-auto object-contain max-h-full rounded-xl"
@@ -2152,306 +1970,426 @@ const App: React.FC = () => {
     );
 
 
-    return (
-      <div className="w-full h-full flex flex-col lg:flex-row gap-4 animate-fade-in overflow-hidden">
-        {/* Sidebar Navigation */}
-        <nav className="flex-shrink-0 flex flex-row lg:flex-col gap-2 bg-gray-800/80 border border-gray-700/80 rounded-lg p-2 backdrop-blur-sm overflow-x-auto lg:overflow-y-auto lg:w-24 custom-scrollbar z-20">
-            {tools.map(tool => (
-                <button
-                    key={tool.id}
-                    onClick={() => setActiveTab(tool.id)}
-                    className={`flex-shrink-0 flex flex-col items-center justify-center gap-1 font-medium py-3 px-2 rounded-md transition-all duration-200 ease-out group relative ${
-                        activeTab === tool.id
-                        ? 'bg-gradient-to-br from-blue-600 to-blue-500 text-white shadow-lg' 
-                        : 'text-gray-400 hover:text-white hover:bg-white/10'
-                    }`}
-                    title={tool.label}
-                >
-                    <tool.icon className={`w-6 h-6 transition-all duration-300 ${activeTab === tool.id ? 'scale-110' : 'group-hover:scale-110'}`} />
-                    <span className="text-[10px] uppercase tracking-wider">{tool.label}</span>
-                </button>
-            ))}
-        </nav>
+  return (
+      <div className="flex h-screen w-full bg-[#090A0F] text-white overflow-hidden font-sans">
+        {/* Navigation Rail (Desktop) / Bottom Nav is implicit by design in mobile via CSS order but we use sidebar layout */}
+        <div className="flex flex-col lg:flex-row w-full h-full">
+            
+            {/* Sidebar Navigation */}
+            <nav className="flex-shrink-0 flex flex-row lg:flex-col gap-2 bg-gray-900 border-r border-gray-800 p-2 overflow-x-auto lg:overflow-y-auto lg:w-20 custom-scrollbar z-20 items-center lg:items-center">
+                 {/* Logo Area */}
+                <div className="hidden lg:flex flex-col items-center justify-center mb-4 p-2">
+                     <SparklesIcon className="w-8 h-8 text-blue-500"/>
+                </div>
 
-        {/* Center: Image & Canvas */}
-        <div className="flex-grow flex flex-col min-w-0 min-h-0 bg-gray-900/30 rounded-xl border border-gray-700/30 overflow-hidden relative group">
-            {/* Main Image Area */}
-            <div className="flex-grow relative w-full h-full overflow-hidden flex items-center justify-center bg-black/20">
-                {isLoading && (
-                    <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-                        <Spinner />
-                        <p className="text-gray-300 animate-pulse-text">Processing...</p>
-                    </div>
-                )}
-                
-                 {/* Image Container with Zoom/Pan */}
-                {activeTab === 'crop' ? (
-                     <div className="max-w-full max-h-full p-8 overflow-auto flex items-center justify-center h-full w-full">
-                        <ReactCrop 
-                            crop={crop} 
-                            onChange={c => setCrop(c)} 
-                            onComplete={c => setCompletedCrop(c)} 
-                            aspect={aspect}
-                            className="max-w-full max-h-full"
-                        >
-                            {cropImageElement}
-                        </ReactCrop>
-                    </div>
-                ) : (
-                    <div className="w-full h-full p-4 flex items-center justify-center">
-                        {imageDisplay}
-                    </div>
-                )}
+                {tools.map(tool => (
+                    <button
+                        key={tool.id}
+                        onClick={() => setActiveTab(tool.id)}
+                        className={`flex-shrink-0 flex flex-col items-center justify-center gap-1 w-16 h-16 rounded-xl transition-all duration-200 ease-out group relative ${
+                            activeTab === tool.id
+                            ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' 
+                            : 'text-gray-400 hover:text-white hover:bg-white/10'
+                        }`}
+                        title={tool.label}
+                    >
+                        <tool.icon className={`w-6 h-6 transition-all duration-300 ${activeTab === tool.id ? 'scale-110' : 'group-hover:scale-110'}`} />
+                        <span className="text-[9px] uppercase tracking-wider font-semibold">{tool.label}</span>
+                    </button>
+                ))}
+            </nav>
 
-                 {/* View Controls (Zoom) */}
-                {isZoomPanEnabled && (
-                    <div className="absolute bottom-4 right-4 z-20">
-                        <ViewControls 
-                            zoom={viewTransform.scale} 
-                            onZoomIn={handleZoomIn}
-                            onZoomOut={handleZoomOut}
-                            onResetView={resetViewTransform}
-                        />
+            {/* Main Content Area: Image + Toolbar */}
+            <div className="flex-grow flex flex-col min-w-0 bg-black/40 relative">
+                {/* Header / Top Bar */}
+                <header className="h-16 border-b border-gray-800 flex items-center justify-between px-6 bg-gray-900/50 backdrop-blur-md z-10">
+                    <div className="flex items-center gap-2 lg:hidden">
+                        <SparklesIcon className="w-6 h-6 text-blue-500"/>
+                        <span className="font-bold">UtilPic</span>
                     </div>
-                )}
-            </div>
+                     {/* History / Actions */}
+                     <div className="flex items-center gap-2 ml-auto">
+                        <button onClick={handleUndo} disabled={!canUndo} className="p-2 text-gray-400 hover:text-white disabled:opacity-30"><UndoIcon className="w-5 h-5"/></button>
+                        <button onClick={handleRedo} disabled={!canRedo} className="p-2 text-gray-400 hover:text-white disabled:opacity-30"><RedoIcon className="w-5 h-5"/></button>
+                        <div className="h-6 w-px bg-gray-700 mx-2"></div>
+                        <button onClick={() => setIsHistoryPanelOpen(true)} className="p-2 text-gray-400 hover:text-white"><HistoryIcon className="w-5 h-5"/></button>
+                        <button onClick={handleDownload} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-semibold ml-2 shadow-lg shadow-blue-500/20">Download</button>
+                     </div>
+                </header>
 
-            {/* Bottom Action Bar */}
-             <div className="flex-shrink-0 p-3 bg-gray-800/80 border-t border-gray-700/50 backdrop-blur-md flex flex-wrap items-center justify-center gap-3 z-20">
-                 {/* Undo/Redo/History/Compare/Split buttons */}
-                  {history.length > 0 && (
-                    <>
-                        <div className="flex bg-gray-700/50 rounded-lg p-1">
-                            <button onClick={handleUndo} disabled={!canUndo} className="p-2 hover:bg-gray-600 rounded-md disabled:opacity-30 transition"><UndoIcon className="w-5 h-5"/></button>
-                            <button onClick={handleRedo} disabled={!canRedo} className="p-2 hover:bg-gray-600 rounded-md disabled:opacity-30 transition"><RedoIcon className="w-5 h-5"/></button>
+                {/* Image Workspace */}
+                <div className="flex-grow relative overflow-hidden flex items-center justify-center">
+                    {/* Error Display */}
+                    {error && (
+                         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-red-500/90 text-white px-6 py-3 rounded-lg shadow-xl backdrop-blur-md max-w-md text-center">
+                            <p>{error}</p>
+                            <button onClick={() => setError(null)} className="text-xs underline mt-1">Dismiss</button>
                         </div>
-                        
-                        <div className="h-8 w-px bg-gray-700 mx-1"></div>
+                    )}
+                    
+                    {!currentImageUrl ? (
+                        <StartScreen onFileSelect={handleFileSelect} />
+                    ) : (
+                       <div 
+                        ref={imageContainerRef}
+                        className="w-full h-full relative"
+                        style={{ cursor: isSplitView ? 'default' : cursorStyle }}
+                        onWheel={handleWheel}
+                        onPointerDown={handlePointerDown}
+                        onPointerMove={handlePointerMove}
+                        onPointerUp={handlePointerUp}
+                       >
+                            {isLoading && (
+                                <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm">
+                                    <Spinner />
+                                    <p className="text-gray-300 mt-4 animate-pulse">Processing...</p>
+                                </div>
+                            )}
 
-                        <button onClick={() => setIsHistoryPanelOpen(true)} className="flex items-center gap-2 px-3 py-2 hover:bg-gray-700/50 rounded-md transition text-sm font-medium text-gray-300">
-                             <HistoryIcon className="w-4 h-4"/> History
-                        </button>
-
-                         {canUndo && (
-                            <>
-                                <button 
-                                    onMouseDown={() => setIsComparing(true)}
-                                    onMouseUp={() => setIsComparing(false)}
-                                    onMouseLeave={() => setIsComparing(false)}
-                                    onTouchStart={() => setIsComparing(true)}
-                                    onTouchEnd={() => setIsComparing(false)}
-                                    className="flex items-center gap-2 px-3 py-2 hover:bg-gray-700/50 rounded-md transition text-sm font-medium text-gray-300 active:bg-blue-600 active:text-white"
-                                >
-                                    <EyeIcon className="w-4 h-4"/> Hold to Compare
-                                </button>
-                                <button 
-                                    onClick={() => {
-                                        const nextState = !isSplitView;
-                                        if (nextState) resetViewTransform();
-                                        setIsSplitView(nextState);
-                                    }}
-                                    className={`flex items-center gap-2 px-3 py-2 rounded-md transition text-sm font-medium ${isSplitView ? 'bg-blue-600 text-white' : 'hover:bg-gray-700/50 text-gray-300'}`}
-                                >
-                                    <SplitScreenIcon className="w-4 h-4"/> Split View
-                                </button>
-                            </>
-                        )}
-                        
-                        <div className="h-8 w-px bg-gray-700 mx-1"></div>
-                        
-                        <button 
-                            onClick={handleDownload}
-                            className="bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-6 rounded-md shadow-lg shadow-green-500/20 transition-all active:scale-95 flex items-center gap-2"
-                        >
-                            Download
-                        </button>
-                    </>
-                )}
-            </div>
-        </div>
-
-        {/* Right: Tools Panel */}
-        <div className="w-full lg:w-[400px] flex-shrink-0 flex flex-col h-[40vh] lg:h-full bg-gray-900/50 border border-gray-700/50 rounded-xl overflow-hidden backdrop-blur-sm">
-             <div className="flex-grow overflow-y-auto custom-scrollbar p-4 flex flex-col gap-4">
-                 {/* Suggestions */}
-                 {showSuggestions && suggestions.length > 0 && (
-                    <SuggestionPanel
-                        suggestions={suggestions}
-                        onApplySuggestion={handleApplySuggestion}
-                        onDismiss={() => setShowSuggestions(false)}
-                    />
-                )}
-                
-                {/* Active Tool Panel */}
-                <div className="grid grid-cols-1">
-                     
-                     {/* RETOUCH CONTENT */}
-                     <div className={`col-start-1 row-start-1 transition-all duration-300 ease-out ${activeTab === 'retouch' ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-5 scale-[0.97] pointer-events-none hidden'}`}>
-                        <div className="animate-fade-in space-y-4">
-                             {/* Retouch Form */}
-                             <div className="p-4 bg-gray-800/50 rounded-lg border border-gray-700/50">
-                                <h3 className="text-lg font-bold text-gray-200 mb-2">Magic Retouch</h3>
-                                <p className="text-sm text-gray-400 mb-4">
-                                   {maskDataUrl ? 'Mask active. Describe edit.' :
-                                   (editHotspot ? 'Point selected. Describe edit.' : 'Click image to select point.')}
-                                </p>
-                                <textarea
-                                    value={prompt}
-                                    onChange={(e) => setPrompt(e.target.value)}
-                                    placeholder={maskDataUrl ? "e.g., 'make it glow'" : "e.g., 'remove this object'"}
-                                    className="w-full bg-gray-900 border border-gray-600 text-gray-200 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:outline-none transition min-h-[100px] text-sm resize-none"
-                                    disabled={isLoading}
-                                />
-                                <div className="flex gap-2 mt-3">
-                                    {maskDataUrl && (
-                                        <button onClick={() => setMaskDataUrl(null)} className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 rounded-md transition text-sm">
-                                            Clear Mask
-                                        </button>
-                                    )}
-                                    <button 
-                                        onClick={() => handleGenerate()}
-                                        disabled={isLoading || !prompt.trim() || (!editHotspot && !maskDataUrl)}
-                                        className="flex-1 bg-gradient-to-r from-blue-600 to-blue-500 text-white font-bold py-2 rounded-md shadow-lg hover:shadow-blue-500/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                            {activeTab === 'crop' ? (
+                                <div className="w-full h-full flex items-center justify-center p-8 overflow-auto">
+                                    <ReactCrop crop={crop} onChange={c => setCrop(c)} onComplete={c => setCompletedCrop(c)} aspect={aspect}>
+                                        {cropImageElement}
+                                    </ReactCrop>
+                                </div>
+                            ) : (
+                                <div className="w-full h-full flex items-center justify-center overflow-hidden relative">
+                                    <div 
+                                        className="relative transition-transform duration-100 ease-out origin-center"
+                                        style={{ 
+                                            transform: `translate(${viewTransform.pan.x}px, ${viewTransform.pan.y}px) scale(${viewTransform.scale})`,
+                                            width: '100%',
+                                            height: '100%',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center'
+                                        }}
                                     >
-                                        Generate
-                                    </button>
+                                        {/* Base Images */}
+                                        {isSplitView ? (
+                                            <div className="relative w-full h-full max-w-full max-h-full flex items-center justify-center">
+                                                 <img 
+                                                    ref={imgRef}
+                                                    src={currentImageUrl} 
+                                                    alt="Current" 
+                                                    className="max-w-full max-h-full object-contain absolute"
+                                                    style={{ filter: previewFilter }}
+                                                 />
+                                                 <div className="absolute inset-0 w-full h-full flex items-center justify-center" style={{ clipPath: `inset(0 ${100 - splitPosition}% 0 0)` }}>
+                                                     <img src={originalImageUrl!} alt="Original" className="max-w-full max-h-full object-contain" />
+                                                 </div>
+                                                  {/* Splitter Handle */}
+                                                  <div
+                                                    className="absolute top-0 bottom-0 w-1 bg-white/75 cursor-ew-resize z-10"
+                                                    style={{ left: `${splitPosition}%` }}
+                                                    onPointerDown={handleSplitterPointerDown}
+                                                >
+                                                    <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-8 h-8 rounded-full bg-white text-black flex items-center justify-center shadow-lg">
+                                                        <SplitScreenIcon className="w-4 h-4 rotate-90" />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                {/* Original (for comparison) */}
+                                                {originalImageUrl && (
+                                                     <img 
+                                                        src={originalImageUrl} 
+                                                        alt="Original" 
+                                                        className="max-w-full max-h-full object-contain absolute pointer-events-none opacity-0" 
+                                                     />
+                                                )}
+                                                {/* Current Image */}
+                                                 <img
+                                                    ref={imgRef}
+                                                    src={currentImageUrl}
+                                                    alt="Current"
+                                                    onLoad={onImageLoad}
+                                                    className={`max-w-full max-h-full object-contain transition-opacity duration-200 ${isComparing ? 'opacity-0' : 'opacity-100'}`}
+                                                    style={{ filter: previewFilter }}
+                                                 />
+                                                 {/* Mask Overlay */}
+                                                 {maskDataUrl && <img src={maskDataUrl} className="max-w-full max-h-full object-contain absolute pointer-events-none" alt="Mask"/>}
+                                            </>
+                                        )}
+                                        
+                                        {/* Overlays */}
+                                        {activeTab === 'overlay' && !isSplitView && (
+                                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                                <div className="relative w-full h-full flex items-center justify-center">
+                                                    {overlayLayers.map(layer => layer.isVisible && (
+                                                         <img
+                                                            key={layer.id}
+                                                            src={layer.previewUrl}
+                                                            style={{
+                                                                position: 'absolute',
+                                                                left: `${layer.position.x}%`,
+                                                                top: `${layer.position.y}%`,
+                                                                width: `${layer.size}%`,
+                                                                opacity: layer.opacity,
+                                                                mixBlendMode: layer.blendMode,
+                                                            }}
+                                                            alt="Overlay"
+                                                         />
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                        
+                                         {/* Hotspot Indicator */}
+                                        {!isSplitView && displayHotspot && !isLoading && (activeTab === 'retouch' || activeTab === 'adjust' || activeTab === 'zoom') && !maskDataUrl && (
+                                            <div 
+                                                className="absolute z-10 animate-hotspot-appear"
+                                                style={{ 
+                                                    left: displayHotspot.x, 
+                                                    top: displayHotspot.y,
+                                                    transform: 'translate(-50%, -50%)',
+                                                    cursor: isDraggingHotspot ? 'grabbing' : 'grab',
+                                                }}
+                                                onPointerDown={handleHotspotPointerDown}
+                                            >
+                                                <div className="w-8 h-8 rounded-full border-2 border-white shadow-[0_0_10px_rgba(0,0,0,0.5)] bg-blue-500/30"></div>
+                                                <div className="w-1 h-1 bg-white rounded-full absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"></div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                             {/* Bottom Controls */}
+                             <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/50 backdrop-blur-md rounded-full px-4 py-2 border border-white/10">
+                                <button onMouseDown={() => setIsComparing(true)} onMouseUp={() => setIsComparing(false)} onMouseLeave={() => setIsComparing(false)} onTouchStart={() => setIsComparing(true)} onTouchEnd={() => setIsComparing(false)} className="p-2 hover:bg-white/10 rounded-full transition"><EyeIcon className="w-5 h-5 text-gray-300" /></button>
+                                <div className="w-px h-4 bg-gray-500"></div>
+                                <button onClick={() => setIsSplitView(!isSplitView)} className={`p-2 rounded-full transition ${isSplitView ? 'text-blue-400 bg-white/10' : 'text-gray-300 hover:bg-white/10'}`}><SplitScreenIcon className="w-5 h-5" /></button>
+                             </div>
+                             
+                             {/* View Controls */}
+                             {isZoomPanEnabled && (
+                                <ViewControls 
+                                    zoom={viewTransform.scale} 
+                                    onZoomIn={handleZoomIn}
+                                    onZoomOut={handleZoomOut}
+                                    onResetView={resetViewTransform}
+                                />
+                             )}
+                       </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Right Panel: Tools */}
+            <div className="w-full lg:w-[400px] flex-shrink-0 flex flex-col h-[45vh] lg:h-full bg-gray-900 border-l border-gray-800 z-30">
+                <div className="flex-grow overflow-y-auto custom-scrollbar p-6 flex flex-col gap-6">
+                     {/* Suggestion Panel */}
+                     {showSuggestions && suggestions.length > 0 && (
+                        <SuggestionPanel
+                            suggestions={suggestions}
+                            onApplySuggestion={handleApplySuggestion}
+                            onDismiss={() => setShowSuggestions(false)}
+                        />
+                    )}
+
+                    {/* Active Tool Content */}
+                    <div className="animate-fade-in">
+                        {activeTab === 'retouch' && (
+                             <div className="space-y-4">
+                                <div className="text-center">
+                                    <h3 className="text-xl font-bold text-gray-200">Magic Retouch</h3>
+                                    <p className="text-sm text-gray-400">Select an area and describe your change.</p>
+                                </div>
+                                <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
+                                    <textarea
+                                        value={prompt}
+                                        onChange={(e) => setPrompt(e.target.value)}
+                                        placeholder={maskDataUrl ? "Describe how to change the masked area..." : "Click a point on the image and describe what to change..."}
+                                        className="w-full bg-gray-900 border border-gray-600 text-gray-200 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:outline-none transition min-h-[100px] text-sm resize-none"
+                                        disabled={isLoading}
+                                    />
+                                    <div className="flex gap-2 mt-3">
+                                        {maskDataUrl && (
+                                            <button onClick={() => setMaskDataUrl(null)} className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 rounded-md transition text-sm">
+                                                Clear Mask
+                                            </button>
+                                        )}
+                                        <button 
+                                            onClick={() => handleGenerate()}
+                                            disabled={isLoading || !prompt.trim() || (!editHotspot && !maskDataUrl)}
+                                            className="flex-1 bg-gradient-to-r from-blue-600 to-blue-500 text-white font-bold py-2 rounded-md shadow-lg hover:shadow-blue-500/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            Generate
+                                        </button>
+                                    </div>
                                 </div>
                              </div>
-                        </div>
-                     </div>
-
-                    <div className={`col-start-1 row-start-1 transition-all duration-300 ease-out ${activeTab === 'adjust' ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-5 scale-[0.97] pointer-events-none hidden'}`}>
-                     <AdjustmentPanel 
-                        onApplyAdjustment={handleApplyAdjustment} 
-                        onApplyAutoEnhance={handleApplyAutoEnhance}
-                        onApplySharpen={handleApplySharpen}
-                        onApplyGrain={handleApplyGrain}
-                        isLoading={isLoading} 
-                        onSetActivePicker={handleSetActivePicker}
-                        activePicker={activeColorPicker}
-                        onApplyLocalAdjustment={handleApplyLocalAdjustment}
-                        isAreaSelected={!!editHotspot || !!maskDataUrl}
-                        onApplyStyleFromUrl={handleApplyStyleFromUrl}
-                        onBatchApply={(prompt, name) => handleOpenBatchPresetModal(prompt, name, 'adjustment')}
-                        onPreviewChange={setPreviewFilter}
-                    />
-                    </div>
-
-                    <div className={`col-start-1 row-start-1 transition-all duration-300 ease-out ${activeTab === 'face' ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-5 scale-[0.97] pointer-events-none hidden'}`}>
-                    <FaceRetouchPanel 
-                        onApplyRetouch={handleApplyFaceRetouch} 
-                        isLoading={isLoading}
-                        currentImage={currentImage}
-                        onFacesDetected={setDetectedFaces}
-                        onFaceSelectionChange={setSelectedFaces}
-                    />
-                    </div>
-                    
-                    <div className={`col-start-1 row-start-1 transition-all duration-300 ease-out ${activeTab === 'faceSwap' ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-5 scale-[0.97] pointer-events-none hidden'}`}>
-                    <FaceSwapPanel 
-                        onApplyFaceSwap={handleApplyFaceSwap} 
-                        isLoading={isLoading}
-                        targetImage={currentImage}
-                    />
-                    </div>
-
-                    <div className={`col-start-1 row-start-1 transition-all duration-300 ease-out ${activeTab === 'crop' ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-5 scale-[0.97] pointer-events-none hidden'}`}>
-                    <CropPanel 
-                        onApply={handleApplyCropAndRotate} 
-                        onSetAspect={setAspect} 
-                        isLoading={isLoading} 
-                        canApply={(!!completedCrop?.width && completedCrop.width > 0) || rotation !== 0}
-                        onAutoRotate={handleAutoRotate} 
-                        onRotateImage={handleRotateImage}
-                        rotation={rotation}
-                        onRotationChange={setRotation}
-                    />
-                    </div>
-                    
-                    <div className={`col-start-1 row-start-1 transition-all duration-300 ease-out ${activeTab === 'filters' ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-5 scale-[0.97] pointer-events-none hidden'}`}>
-                    <FilterPanel onApplyFilter={handleApplyFilter} isLoading={isLoading} onBatchApply={(prompt, name) => handleOpenBatchPresetModal(prompt, name, 'filter')} />
-                    </div>
-
-                    <div className={`col-start-1 row-start-1 transition-all duration-300 ease-out ${activeTab === 'colorGrade' ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-5 scale-[0.97] pointer-events-none hidden'}`}>
-                    <ColorGradePanel onApplyColorGrade={handleApplyColorGrade} isLoading={isLoading} onBatchApply={(prompt, name) => handleOpenBatchPresetModal(prompt, name, 'colorGrade')} />
-                    </div>
-
-                    <div className={`col-start-1 row-start-1 transition-all duration-300 ease-out ${activeTab === 'background' ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-5 scale-[0.97] pointer-events-none hidden'}`}>
-                    <BackgroundPanel onRemoveBackground={handleRemoveBackground} onApplyNewBackground={handleApplyNewBackground} isLoading={isLoading} isBgRemovalMode={isBgRemovalMode} />
-                    </div>
-
-                    <div className={`col-start-1 row-start-1 transition-all duration-300 ease-out ${activeTab === 'overlay' ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-5 scale-[0.97] pointer-events-none hidden'}`}>
-                    <OverlayPanel 
-                        layers={overlayLayers}
-                        activeLayerId={activeOverlayId}
-                        onAddLayer={handleAddNewOverlay}
-                        onDeleteLayer={handleDeleteOverlay}
-                        onUpdateLayer={handleUpdateOverlay}
-                        onSelectLayer={handleSelectOverlay}
-                        onToggleVisibility={handleToggleOverlayVisibility}
-                        onReorderLayers={handleReorderOverlays}
-                        onApplyAll={handleApplyAllOverlays}
-                        isLoading={isLoading} 
-                    />
-                    </div>
-
-                    <div className={`col-start-1 row-start-1 transition-all duration-300 ease-out ${activeTab === 'doubleExposure' ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-5 scale-[0.97] pointer-events-none hidden'}`}>
-                        <DoubleExposurePanel onApply={handleApplyDoubleExposure} isLoading={isLoading} />
-                    </div>
-
-                    <div className={`col-start-1 row-start-1 transition-all duration-300 ease-out ${activeTab === 'upscale' ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-5 scale-[0.97] pointer-events-none hidden'}`}>
-                    <UpscalePanel onApplyUpscale={handleApplyUpscale} isLoading={isLoading} />
-                    </div>
-
-                    <div className={`col-start-1 row-start-1 transition-all duration-300 ease-out ${activeTab === 'zoom' ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-5 scale-[0.97] pointer-events-none hidden'}`}>
-                    <ZoomPanel
-                        onApplyZoom={handleApplyZoom}
-                        isLoading={isLoading}
-                        isAreaSelected={!!editHotspot}
-                        editHotspot={editHotspot}
-                        imageRef={imgRef}
-                    />
-                    </div>
-                    
-                    <div className={`col-start-1 row-start-1 transition-all duration-300 ease-out ${activeTab === 'restore' ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-5 scale-[0.97] pointer-events-none hidden'}`}>
-                    <RestorePanel onApplyRestore={handleApplyRestoration} isLoading={isLoading} />
-                    </div>
-
-                    <div className={`col-start-1 row-start-1 transition-all duration-300 ease-out ${activeTab === 'watermark' ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-5 scale-[0.97] pointer-events-none hidden'}`}>
-                    <WatermarkPanel onApplyWatermark={handleApplyWatermark} isLoading={isLoading} />
+                        )}
+                        {activeTab === 'mask' && (
+                            <div className="text-center p-8 bg-gray-800/50 rounded-lg border border-gray-700">
+                                <p className="text-gray-300 mb-4">Launch the advanced Mask Editor to create precise selections and apply local adjustments.</p>
+                                <button 
+                                    onClick={() => {/* Mask Editor is handled by modal, but we can trigger it here if needed or just use the Nav button logic to open a modal state */}} 
+                                    className="px-6 py-3 bg-blue-600 text-white rounded-lg font-bold shadow-lg hover:bg-blue-500"
+                                >
+                                    Open Mask Editor
+                                </button>
+                                {/* Note: Mask Editor is a full screen modal triggered by state. We render it conditionally below. */}
+                            </div>
+                        )}
+                        {activeTab === 'adjust' && (
+                             <AdjustmentPanel 
+                                onApplyAdjustment={handleApplyAdjustment} 
+                                onApplyAutoEnhance={handleApplyAutoEnhance}
+                                onApplySharpen={handleApplySharpen}
+                                onApplyGrain={handleApplyGrain}
+                                isLoading={isLoading} 
+                                onSetActivePicker={handleSetActivePicker}
+                                activePicker={activeColorPicker}
+                                onApplyLocalAdjustment={handleApplyLocalAdjustment}
+                                isAreaSelected={!!editHotspot || !!maskDataUrl}
+                                onApplyStyleFromUrl={handleApplyStyleFromUrl}
+                                onBatchApply={(prompt, name) => handleOpenBatchPresetModal(prompt, name, 'adjustment')}
+                                onPreviewChange={setPreviewFilter}
+                            />
+                        )}
+                        {activeTab === 'filters' && (
+                            <FilterPanel onApplyFilter={handleApplyFilter} isLoading={isLoading} onBatchApply={(prompt, name) => handleOpenBatchPresetModal(prompt, name, 'filter')} />
+                        )}
+                        {activeTab === 'colorGrade' && (
+                            <ColorGradePanel onApplyColorGrade={handleApplyColorGrade} isLoading={isLoading} onBatchApply={(prompt, name) => handleOpenBatchPresetModal(prompt, name, 'colorGrade')} />
+                        )}
+                         {activeTab === 'face' && (
+                            <FaceRetouchPanel 
+                                onApplyRetouch={handleApplyFaceRetouch} 
+                                isLoading={isLoading}
+                                currentImage={currentImage}
+                                onFacesDetected={setDetectedFaces}
+                                onFaceSelectionChange={setSelectedFaces}
+                            />
+                        )}
+                        {activeTab === 'faceSwap' && (
+                            <FaceSwapPanel 
+                                onApplyFaceSwap={handleApplyFaceSwap} 
+                                isLoading={isLoading}
+                                targetImage={currentImage}
+                            />
+                        )}
+                        {activeTab === 'crop' && (
+                            <CropPanel 
+                                onApply={handleApplyCropAndRotate} 
+                                onSetAspect={setAspect} 
+                                isLoading={isLoading} 
+                                canApply={(!!completedCrop?.width && completedCrop.width > 0) || rotation !== 0}
+                                onAutoRotate={handleAutoRotate} 
+                                onRotateImage={handleRotateImage}
+                                rotation={rotation}
+                                onRotationChange={setRotation}
+                            />
+                        )}
+                         {activeTab === 'background' && (
+                             <BackgroundPanel onRemoveBackground={handleRemoveBackground} onApplyNewBackground={handleApplyNewBackground} isLoading={isLoading} isBgRemovalMode={isBgRemovalMode} />
+                        )}
+                        {activeTab === 'overlay' && (
+                            <OverlayPanel 
+                                layers={overlayLayers}
+                                activeLayerId={activeOverlayId}
+                                onAddLayer={handleAddNewOverlay}
+                                onDeleteLayer={handleDeleteOverlay}
+                                onUpdateLayer={handleUpdateOverlay}
+                                onSelectLayer={handleSelectOverlay}
+                                onToggleVisibility={handleToggleOverlayVisibility}
+                                onReorderLayers={handleReorderOverlays}
+                                onApplyAll={handleApplyAllOverlays}
+                                isLoading={isLoading} 
+                            />
+                        )}
+                        {activeTab === 'doubleExposure' && (
+                             <DoubleExposurePanel onApply={handleApplyDoubleExposure} isLoading={isLoading} />
+                        )}
+                        {activeTab === 'upscale' && (
+                            <UpscalePanel onApplyUpscale={handleApplyUpscale} isLoading={isLoading} />
+                        )}
+                        {activeTab === 'zoom' && (
+                             <ZoomPanel
+                                onApplyZoom={handleApplyZoom}
+                                isLoading={isLoading}
+                                isAreaSelected={!!editHotspot}
+                                editHotspot={editHotspot}
+                                imageRef={imgRef}
+                            />
+                        )}
+                        {activeTab === 'restore' && (
+                             <RestorePanel onApplyRestore={handleApplyRestoration} isLoading={isLoading} />
+                        )}
+                        {activeTab === 'watermark' && (
+                             <WatermarkPanel onApplyWatermark={handleApplyWatermark} isLoading={isLoading} />
+                        )}
                     </div>
                 </div>
-             </div>
-             
-             {/* Bottom of Sidebar: Global Actions like Upload New / Reset / Batch */}
-             <div className="p-4 border-t border-gray-700/50 bg-gray-800/50 flex flex-col gap-2">
-                 <button 
-                    onClick={() => setIsBatchEditModalOpen(true)}
-                    disabled={!canUndo}
-                    className="w-full flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-gray-300 py-2 rounded-md transition text-sm font-medium border border-gray-700 disabled:opacity-50"
-                >
-                    <DocumentDuplicateIcon className="w-4 h-4" /> Batch Edit History
-                </button>
-                <div className="flex gap-2">
-                    <button onClick={handleReset} className="flex-1 py-2 text-sm text-gray-400 hover:text-white transition">Reset All</button>
-                    <button onClick={handleUploadNew} className="flex-1 py-2 text-sm text-gray-400 hover:text-white transition">Upload New</button>
+                
+                {/* Sidebar Footer */}
+                <div className="p-4 bg-gray-800/50 border-t border-gray-700">
+                     <button 
+                        onClick={() => setIsBatchEditModalOpen(true)}
+                        disabled={!canUndo}
+                        className="w-full flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-gray-300 py-3 rounded-lg transition text-sm font-medium border border-gray-700 disabled:opacity-50 mb-3"
+                    >
+                        <DocumentDuplicateIcon className="w-4 h-4" /> Batch Edit History Style
+                    </button>
+                    <div className="flex gap-2">
+                        <button onClick={handleReset} className="flex-1 py-2 text-sm text-gray-400 hover:text-white transition bg-gray-800 rounded-lg">Reset All</button>
+                        <button onClick={handleUploadNew} className="flex-1 py-2 text-sm text-gray-400 hover:text-white transition bg-gray-800 rounded-lg">New Image</button>
+                    </div>
                 </div>
-             </div>
+            </div>
         </div>
+
+        {/* Global Modals */}
+        <DownloadModal 
+            isOpen={isDownloadModalOpen} 
+            onClose={() => setIsDownloadModalOpen(false)} 
+            onConfirm={handleConfirmDownload}
+            imageFile={currentImage}
+        />
+        {originalImage && currentImage && (
+            <BatchEditModal
+                isOpen={isBatchEditModalOpen}
+                onClose={() => setIsBatchEditModalOpen(false)}
+                originalImage={originalImage}
+                editedImage={currentImage}
+            />
+        )}
+        {batchPresetInfo && (
+            <BatchPresetModal
+                isOpen={isBatchPresetModalOpen}
+                onClose={() => setIsBatchPresetModalOpen(false)}
+                presetName={batchPresetInfo.name}
+                presetPrompt={batchPresetInfo.prompt}
+                presetType={batchPresetInfo.type}
+            />
+        )}
+        {isHistoryPanelOpen && (
+            <HistoryPanel 
+                history={history} 
+                currentIndex={historyIndex} 
+                onSelectHistory={handleHistorySelect} 
+                onClose={() => setIsHistoryPanelOpen(false)} 
+            />
+        )}
+        {/* Mask Editor: Rendered when tab is Mask OR specifically opened via state if we had a dedicated state. 
+            Currently leveraging activeTab. For better UX, it overlays the whole screen. */}
+        <MaskEditor
+            isOpen={activeTab === 'mask'}
+            onClose={() => setActiveTab('retouch')}
+            onApplyMask={handleApplyMask}
+            baseImageSrc={currentImageUrl}
+        />
+        {sessionToRestore && (
+            <RestoreSessionModal 
+                onRestore={handleRestoreSession} 
+                onStartNew={handleStartNewSession} 
+            />
+        )}
       </div>
-    );
-  };
-  
-  if (isLoadingSession) {
-    return (
-        <div className="min-h-screen text-gray-100 flex flex-col">
-            <Header />
-            <main className="flex-grow w-full flex items-center justify-center">
-                <Spinner />
-            </main>
-        </div>
-    );
-  }
+  );
+};
 
-  return (
-    
+export default App;
