@@ -1,3 +1,4 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -104,7 +105,6 @@ const MaskEditor: React.FC<MaskEditorProps> = ({ isOpen, onClose, onApplyMask, b
         }
         // If dimensions changed, we might lose mask data. Ideally we'd scale it.
         // For simplicity, we keep it consistent or clear it. 
-        // Let's try to preserve by drawing old to new if needed, but basic implementation first.
         const prevMaskCtx = maskCanvasRef.current.getContext('2d');
         const tempMask = document.createElement('canvas');
         if (maskCanvasRef.current.width > 0) {
@@ -165,57 +165,23 @@ const MaskEditor: React.FC<MaskEditorProps> = ({ isOpen, onClose, onApplyMask, b
       // 1. Clear Screen
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // 2. Draw pure original image? No, wait. 
-      // We want to verify if adjustments are active.
       const hasAdjustments = Object.values(adjustments).some(v => v !== 0);
 
       if (hasAdjustments) {
           // --- PREVIEW MODE ---
-          // Draw Original
-          // Draw Filtered Version masked by MaskCanvas
-          
           // Layer 1: Original
-          // (Can't draw image element directly if aspect ratio differs, use resize logic or background div?)
-          // Since the canvas matches the displayed image area perfectly:
-          // We can't draw the HTMLImageElement easily if it's styled "object-contain".
-          // But our resizeCanvas logic sets canvas size exactly to the image display size.
-          // So we can draw the image scaled to canvas size.
           ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
           
           // Layer 2: Adjusted
-          ctx.save();
-          // Construct filter string
-          // Mapping:
-          // Exposure -> Brightness (50% to 150%)
-          // Contrast -> Contrast (50% to 150%)
-          // Highlights/Shadows/Whites/Blacks -> Approximation via brightness/contrast curves is hard in CSS filters.
-          // We will map Highlights/Whites to Brightness and Shadows/Blacks to Contrast/Brightness combo for preview.
           const brightnessVal = 100 + adjustments.exposure + (adjustments.highlights / 2) + (adjustments.whites / 2);
-          const contrastVal = 100 + adjustments.contrast + (adjustments.shadows / 4) + (adjustments.blacks / 4); // Crude approximation
-          const saturateVal = 100 + (adjustments.structure / 2); // Structure often correlates with local contrast/sat perception slightly, or just ignore.
+          const contrastVal = 100 + adjustments.contrast + (adjustments.shadows / 4) + (adjustments.blacks / 4); 
+          const saturateVal = 100 + (adjustments.structure / 2); 
           
           let filterString = `brightness(${brightnessVal}%) contrast(${contrastVal}%) saturate(${saturateVal}%)`;
           if (adjustments.temperature !== 0) {
              filterString += adjustments.temperature > 0 ? ` sepia(${adjustments.temperature * 0.3}%)` : ` hue-rotate(${adjustments.temperature/2}deg)`;
           }
 
-          ctx.filter = filterString;
-          ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
-          ctx.restore();
-
-          // Layer 3: Apply Mask (Keep only the adjusted parts where mask exists)
-          // We use 'destination-in' to keep the adjusted image ONLY where the mask is opaque.
-          // BUT, we already drew the original on Step 1.
-          // So Step 2 drew over it. Now we need to CUT Step 2 to the mask shape.
-          // Wait, 'destination-in' will cut the *entire canvas* content.
-          // Correct approach:
-          // 1. Draw Original.
-          // 2. Save state.
-          // 3. Create Offscreen canvas for Adjusted Image.
-          // 4. Draw Adjusted Image on Offscreen.
-          // 5. Draw Mask on Offscreen (composite destination-in).
-          // 6. Draw Offscreen on Main Canvas.
-          
           const tempCanvas = document.createElement('canvas');
           tempCanvas.width = canvas.width;
           tempCanvas.height = canvas.height;
@@ -227,6 +193,7 @@ const MaskEditor: React.FC<MaskEditorProps> = ({ isOpen, onClose, onApplyMask, b
               tempCtx.filter = 'none';
 
               // Composite Mask
+              // destination-in: The existing content is kept where it overlaps the new shape.
               tempCtx.globalCompositeOperation = 'destination-in';
               tempCtx.drawImage(maskCanvas, 0, 0);
               
@@ -237,10 +204,6 @@ const MaskEditor: React.FC<MaskEditorProps> = ({ isOpen, onClose, onApplyMask, b
       } else {
           // --- SELECTION MODE ---
           // Just draw the red overlay.
-          // We assume the background image is visible via the <img> tag behind the canvas.
-          // The canvas only needs to show the Red Mask.
-          // Wait, if we clear the canvas, we see the image behind.
-          // So we just draw the maskCanvas in Red.
           
           // 1. Clear
           ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -272,10 +235,6 @@ const MaskEditor: React.FC<MaskEditorProps> = ({ isOpen, onClose, onApplyMask, b
     if (!ctx) return;
 
     const radius = brushSize / 2;
-    
-    // For the mask logic: White = Selected (Opaque), Transparent = Unselected.
-    // The "Red" visual is handled in drawMainCanvas.
-    // So here we draw pure white (or eraser clears it).
     
     ctx.globalCompositeOperation = activeTool === 'eraser' ? 'destination-out' : 'source-over';
 
@@ -409,15 +368,46 @@ const MaskEditor: React.FC<MaskEditorProps> = ({ isOpen, onClose, onApplyMask, b
 
           // Draw result onto MASK canvas
           const maskImg = new Image();
+          maskImg.crossOrigin = "anonymous";
           maskImg.onload = () => {
              const ctx = maskCanvas.getContext('2d');
              if (ctx) {
-                 // The AI returns B&W mask. We just draw it onto our mask canvas.
-                 // Lighter pixels = Selected.
-                 // We might need to ensure it's treated as an alpha map.
-                 // Simple approach: Draw it. The visualizer handles the red.
-                 ctx.globalCompositeOperation = 'source-over'; // Add to current selection or replace? usually add.
-                 ctx.drawImage(maskImg, 0, 0, maskCanvas.width, maskCanvas.height);
+                 const tempCanvas = document.createElement('canvas');
+                 tempCanvas.width = maskCanvas.width;
+                 tempCanvas.height = maskCanvas.height;
+                 const tempCtx = tempCanvas.getContext('2d');
+                 
+                 if (tempCtx) {
+                    // Draw the B&W image from AI
+                    tempCtx.drawImage(maskImg, 0, 0, maskCanvas.width, maskCanvas.height);
+                    
+                    // Process pixel data to convert Black/White to Alpha Mask
+                    // The AI returns a B&W image where White = Selected, Black = Unselected.
+                    // However, it's an opaque image. We need to convert Black pixels to Transparent pixels.
+                    const imageData = tempCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
+                    const data = imageData.data;
+                    
+                    for (let i = 0; i < data.length; i += 4) {
+                        // Use Red channel as brightness/intensity
+                        const brightness = data[i]; 
+                        
+                        // Set the pixel color to White (255, 255, 255)
+                        data[i] = 255;     // R
+                        data[i + 1] = 255; // G
+                        data[i + 2] = 255; // B
+                        
+                        // Set Alpha based on brightness. 
+                        // White pixels (brightness 255) -> Alpha 255 (Opaque)
+                        // Black pixels (brightness 0) -> Alpha 0 (Transparent)
+                        data[i + 3] = brightness; 
+                    }
+                    
+                    tempCtx.putImageData(imageData, 0, 0);
+                    
+                    // Now draw this processed alpha mask onto the main mask canvas
+                    ctx.globalCompositeOperation = 'source-over'; 
+                    ctx.drawImage(tempCanvas, 0, 0);
+                 }
                  
                  drawMainCanvas();
              }
@@ -467,9 +457,6 @@ const MaskEditor: React.FC<MaskEditorProps> = ({ isOpen, onClose, onApplyMask, b
         ctx.drawImage(maskCanvas, 0, 0, image.naturalWidth, image.naturalHeight);
         
         // If we are applying adjustments, we generate a prompt.
-        // If no adjustments, we just return mask for other uses?
-        // The prompt assumes we are doing adjustments.
-        
         const autoPrompt = generatePromptFromValues();
         onApplyMask(scaledCanvas.toDataURL(), autoPrompt);
     }
@@ -519,11 +506,6 @@ const MaskEditor: React.FC<MaskEditorProps> = ({ isOpen, onClose, onApplyMask, b
             {/* MIDDLE CANVAS AREA */}
             <div ref={containerRef} className="flex-grow relative bg-black/40 flex items-center justify-center overflow-hidden">
                 {/* Background Image: Only shown if no adjustments active, otherwise Canvas draws it. */}
-                {/* Actually, if we use object-contain on image and canvas, they align. 
-                    But Canvas drawing image manually might miss sub-pixel antialiasing or differ in scaling slightly.
-                    However, for preview it's fine. 
-                    Let's hide the background <img> when we are drawing full preview on canvas. 
-                */}
                 {baseImageSrc && (
                     <img
                         ref={imageRef}
