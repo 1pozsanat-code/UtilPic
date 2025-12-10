@@ -171,6 +171,30 @@ const applyFullImageEffect = async (image: File, prompt: string, model: string =
 };
 
 /**
+ * Generates a segmentation mask (black and white) for a specific subject in the image.
+ */
+export const generateSegmentationMask = async (image: File, subject: 'sky' | 'subject'): Promise<string> => {
+    const imagePart = await fileToGenerativePart(image);
+    
+    let prompt = "";
+    if (subject === 'sky') {
+        prompt = "Generate a pixel-perfect, high-contrast binary mask where the sky is pure white (255) and everything else (ground, buildings, trees, mountains) is pure black (0). Ensure pixel-perfect edge detection along the horizon and intricate details like tree branches or skylines. The output must be strictly black and white with no gray areas.";
+    } else {
+        prompt = "Generate a pixel-perfect, high-contrast binary mask where the main subject(s) (people, animals, or foreground objects) are pure white (255) and the background is pure black (0). Focus on exact boundaries, especially around hair, clothing, and complex contours. The output must be strictly black and white with no gray areas.";
+    }
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        contents: { parts: [imagePart, { text: prompt }] },
+        config: {
+            responseModalities: [Modality.IMAGE],
+        },
+    });
+
+    return extractImageDataUrl(response);
+};
+
+/**
  * Applies a generative edit to an image based on a text prompt and optional mask/hotspot.
  */
 export const generateEditedImage = async (

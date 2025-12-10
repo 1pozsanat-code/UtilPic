@@ -509,13 +509,16 @@ const App: React.FC = () => {
     }
   }, [resetViewTransform]);
 
-  const handleGenerate = useCallback(async () => {
+  const handleGenerate = useCallback(async (overridePrompt?: string) => {
     if (!currentImage) {
       setError('No image loaded to edit.');
       return;
     }
     
-    if (!prompt.trim()) {
+    // Use the override prompt if provided, otherwise check the state
+    const promptToUse = overridePrompt || prompt;
+
+    if (!promptToUse.trim()) {
         setError('Please enter a description for your edit.');
         return;
     }
@@ -534,8 +537,9 @@ const App: React.FC = () => {
             maskFile = await createBlackAndWhiteMask(maskDataUrl, imgRef.current.naturalWidth, imgRef.current.naturalHeight);
         }
         
-        const editedImageUrl = await generateEditedImage(currentImage, prompt, editHotspot, maskFile);
+        const editedImageUrl = await generateEditedImage(currentImage, promptToUse, editHotspot, maskFile);
         await addImageToHistory(editedImageUrl);
+        setPrompt(''); // Clear prompt after success
     } catch (err) {
         const errorMessage = getErrorMessage(err);
         setError(`Failed to generate the image. ${errorMessage}`);
@@ -1672,10 +1676,40 @@ const App: React.FC = () => {
     setShowSuggestions(false);
   };
 
-  const handleApplyMask = useCallback((newMaskDataUrl: string) => {
+  const handleApplyMask = useCallback(async (newMaskDataUrl: string, autoPrompt?: string) => {
     setMaskDataUrl(newMaskDataUrl);
-    setActiveTab('retouch'); // Switch back to retouch to enter prompt
-  }, []);
+    
+    if (autoPrompt) {
+        // If the mask editor provided a generated prompt, apply it immediately.
+        // We need to wait for state updates, so we'll call generate directly with the new mask data
+        // instead of relying on state (which might be stale in this callback scope)
+        setIsLoading(true);
+        setError(null);
+        try {
+            let maskFile: File | undefined = undefined;
+            if (imgRef.current) {
+                maskFile = await createBlackAndWhiteMask(newMaskDataUrl, imgRef.current.naturalWidth, imgRef.current.naturalHeight);
+            }
+            
+            // We use the current image file memoized in the component scope
+            if (currentImage) {
+                const editedImageUrl = await generateEditedImage(currentImage, autoPrompt, null, maskFile);
+                await addImageToHistory(editedImageUrl);
+                // Clear mask after successful generation
+                setMaskDataUrl(null); 
+            }
+        } catch (err) {
+             const errorMessage = getErrorMessage(err);
+            setError(`Failed to apply local adjustments. ${errorMessage}`);
+        } finally {
+            setIsLoading(false);
+            setActiveTab('retouch'); // Return to main view
+        }
+    } else {
+        // Standard manual flow
+        setActiveTab('retouch');
+    }
+  }, [addImageToHistory, currentImage]);
 
   const handleOpenBatchPresetModal = useCallback((prompt: string, name:string, type: 'filter' | 'colorGrade' | 'adjustment') => {
     setBatchPresetInfo({ prompt, name, type });
