@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { EyedropperWBIcon, EyedropperWhiteIcon, EyedropperBlackIcon, SparklesIcon, SharpenIcon, GrainIcon, DocumentDuplicateIcon } from './icons.tsx';
 
 export type ColorPickerType = 'white' | 'black' | 'gray';
@@ -20,9 +20,10 @@ interface AdjustmentPanelProps {
   isAreaSelected: boolean;
   onApplyStyleFromUrl: (url: string) => void;
   onBatchApply: (prompt: string, name: string) => void;
+  onPreviewChange?: (filterStyle: string) => void;
 }
 
-const AdjustmentPanel: React.FC<AdjustmentPanelProps> = ({ onApplyAdjustment, onApplyAutoEnhance, onApplySharpen, onApplyGrain, isLoading, onSetActivePicker, activePicker, onApplyLocalAdjustment, isAreaSelected, onApplyStyleFromUrl, onBatchApply }) => {
+const AdjustmentPanel: React.FC<AdjustmentPanelProps> = ({ onApplyAdjustment, onApplyAutoEnhance, onApplySharpen, onApplyGrain, isLoading, onSetActivePicker, activePicker, onApplyLocalAdjustment, isAreaSelected, onApplyStyleFromUrl, onBatchApply, onPreviewChange }) => {
   // State for sliders
   const [exposure, setExposure] = useState(0);
   const [brightness, setBrightness] = useState(0);
@@ -53,6 +54,55 @@ const AdjustmentPanel: React.FC<AdjustmentPanelProps> = ({ onApplyAdjustment, on
   // State for custom prompt
   const [customPrompt, setCustomPrompt] = useState('');
   const [styleUrl, setStyleUrl] = useState('');
+  
+  // Effect to generate live CSS preview string
+  useEffect(() => {
+    if (!onPreviewChange) return;
+
+    if (exposure === 0 && brightness === 0 && contrast === 0 && saturation === 0 && blur === 0 && temperature === 0) {
+        onPreviewChange('');
+        return;
+    }
+    
+    const filters: string[] = [];
+    
+    // Convert Exposure/Brightness to CSS Brightness (approx)
+    // Range -50 to 50. Map to percentage 50% to 150%.
+    const totalBrightness = exposure + brightness;
+    if (totalBrightness !== 0) {
+        filters.push(`brightness(${100 + totalBrightness}%)`);
+    }
+
+    // Convert Contrast
+    if (contrast !== 0) {
+        filters.push(`contrast(${100 + contrast}%)`);
+    }
+
+    // Convert Saturation
+    if (saturation !== 0) {
+        filters.push(`saturate(${100 + saturation}%)`);
+    }
+    
+    // Convert Blur
+    if (blur > 0) {
+        filters.push(`blur(${blur / 10}px)`);
+    }
+    
+    // Approx Temperature using Sepia and Hue-Rotate
+    if (temperature !== 0) {
+        if (temperature > 0) {
+            // Warm
+            filters.push(`sepia(${temperature * 0.5}%)`); 
+        } else {
+             // Cool (Hue rotate towards blue approx)
+             filters.push(`hue-rotate(${temperature / 2}deg)`); 
+        }
+    }
+
+    onPreviewChange(filters.join(' '));
+
+  }, [exposure, brightness, contrast, saturation, blur, temperature, onPreviewChange]);
+
 
   const presets = [
     { name: 'Blur Background', prompt: 'Apply a realistic depth-of-field effect, making the background blurry while keeping the main subject in sharp focus.', description: 'Creates a "Portrait Mode" effect by blurring the background.' },

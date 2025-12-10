@@ -307,6 +307,9 @@ const App: React.FC = () => {
   const [batchPresetInfo, setBatchPresetInfo] = useState<{ name: string; prompt: string; type: 'filter' | 'colorGrade' | 'adjustment' } | null>(null);
   const [activeColorPicker, setActiveColorPicker] = useState<ColorPickerType | null>(null);
   const [maskDataUrl, setMaskDataUrl] = useState<string | null>(null);
+  
+  // Real-time preview filter string (e.g., "contrast(1.2) brightness(1.1)")
+  const [previewFilter, setPreviewFilter] = useState<string>('');
 
   // Split View state
   const [isSplitView, setIsSplitView] = useState<boolean>(false);
@@ -392,6 +395,9 @@ const App: React.FC = () => {
 
   // Reset states based on active tab
   useEffect(() => {
+    // Clear preview filter when changing tabs
+    setPreviewFilter('');
+
     if (activeTab !== 'background') {
         setIsBgRemovalMode(false);
     }
@@ -430,6 +436,9 @@ const App: React.FC = () => {
 
   const addImageToHistory = useCallback(async (newImageDataUrl: string) => {
     setShowSuggestions(false);
+    // Clear the preview filter now that the change is committed
+    setPreviewFilter(''); 
+    
     const newHistory = history.slice(0, historyIndex + 1);
     const newHistoryIndex = newHistory.length;
 
@@ -467,6 +476,7 @@ const App: React.FC = () => {
     setIsLoading(true);
     setSuggestions([]);
     setShowSuggestions(false);
+    setPreviewFilter('');
     resetViewTransform();
 
     try {
@@ -530,6 +540,7 @@ const App: React.FC = () => {
 
     setIsLoading(true);
     setError(null);
+    setPreviewFilter(''); // Clear preview when generating
     
     try {
         let maskFile: File | undefined = undefined;
@@ -561,6 +572,7 @@ const App: React.FC = () => {
 
     setIsLoading(true);
     setError(null);
+    setPreviewFilter('');
     
     try {
         let maskFile: File | undefined = undefined;
@@ -587,6 +599,7 @@ const App: React.FC = () => {
     
     setIsLoading(true);
     setError(null);
+    setPreviewFilter('');
     
     try {
         const filteredImageUrl = await generateFilteredImage(currentImage, filterPrompt);
@@ -608,6 +621,7 @@ const App: React.FC = () => {
     
     setIsLoading(true);
     setError(null);
+    setPreviewFilter('');
     
     try {
         const gradedImageUrl = await generateColorGradedImage(currentImage, gradePrompt);
@@ -629,6 +643,9 @@ const App: React.FC = () => {
     
     setIsLoading(true);
     setError(null);
+    // Note: We don't clear previewFilter here immediately if we wanted to fade it out, 
+    // but clearing it ensures the new image (from AI) replaces the CSS preview cleanly.
+    setPreviewFilter(''); 
     
     try {
         const adjustedImageUrl = await generateAdjustedImage(currentImage, adjustmentPrompt);
@@ -649,6 +666,8 @@ const App: React.FC = () => {
     }
     setIsLoading(true);
     setError(null);
+    setPreviewFilter('');
+
     try {
         // Fetch the image from the URL
         const response = await fetch(styleUrl);
@@ -675,6 +694,7 @@ const App: React.FC = () => {
     
     setIsLoading(true);
     setError(null);
+    setPreviewFilter('');
     
     try {
         const sharpenedImageUrl = await generateSharpenedImage(currentImage, intensity);
@@ -696,6 +716,7 @@ const App: React.FC = () => {
     
     setIsLoading(true);
     setError(null);
+    setPreviewFilter('');
     
     try {
         const grainyImageUrl = await generateGrainImage(currentImage, intensity);
@@ -722,6 +743,7 @@ const App: React.FC = () => {
     
     setIsLoading(true);
     setError(null);
+    setPreviewFilter('');
     
     try {
         const retouchedImageUrl = await generateRetouchedFace(currentImage, settings);
@@ -743,6 +765,7 @@ const App: React.FC = () => {
     
     setIsLoading(true);
     setError(null);
+    setPreviewFilter('');
     
     try {
         const swappedImageUrl = await generateFaceSwap(currentImage, sourceImage, targetFace, sourceFace);
@@ -764,6 +787,7 @@ const App: React.FC = () => {
 
     setIsLoading(true);
     setError(null);
+    setPreviewFilter('');
 
     try {
         const { naturalWidth, naturalHeight } = imgRef.current;
@@ -814,6 +838,7 @@ const App: React.FC = () => {
 
     setIsLoading(true);
     setError(null);
+    setPreviewFilter('');
 
     try {
         const restoredImageUrl = await generateRestoredImage(currentImage);
@@ -835,6 +860,7 @@ const App: React.FC = () => {
 
     setIsLoading(true);
     setError(null);
+    setPreviewFilter('');
 
     try {
         const image = new Image();
@@ -931,6 +957,7 @@ const App: React.FC = () => {
 
     setIsLoading(true);
     setError(null);
+    setPreviewFilter('');
 
     try {
         const removedBgImageUrl = await generateRemovedBackground(currentImage);
@@ -953,6 +980,7 @@ const App: React.FC = () => {
 
     setIsLoading(true);
     setError(null);
+    setPreviewFilter('');
 
     let backgroundImageUrl: string | null = null;
     let isObjectURL = false;
@@ -1100,6 +1128,7 @@ const App: React.FC = () => {
 
     setIsLoading(true);
     setError(null);
+    setPreviewFilter('');
 
     try {
         const baseImage = new Image();
@@ -1169,6 +1198,7 @@ const App: React.FC = () => {
     
     setIsLoading(true);
     setError(null);
+    setPreviewFilter('');
     
     try {
         const newImageUrl = await generateDoubleExposure(currentImage, settings.overlayFile, settings.blendMode, settings.opacity);
@@ -1309,6 +1339,7 @@ const App: React.FC = () => {
 
     setIsLoading(true);
     setError(null);
+    setPreviewFilter('');
     
     try {
       const rotatedImageUrl = await generateCorrectedOrientation(currentImage);
@@ -1330,6 +1361,7 @@ const App: React.FC = () => {
 
     setIsLoading(true);
     setError(null);
+    setPreviewFilter('');
     
     try {
       const rotatedImageUrl = await generateRotatedImage(currentImage, direction);
@@ -1351,6 +1383,7 @@ const App: React.FC = () => {
 
     setIsLoading(true);
     setError(null);
+    setPreviewFilter('');
 
     try {
         const image = imgRef.current;
@@ -1418,6 +1451,7 @@ const App: React.FC = () => {
       setActiveOverlayId(null);
       setMaskDataUrl(null);
       setRotation(0);
+      setPreviewFilter('');
       resetViewTransform();
     }
   }, [canUndo, historyIndex, resetViewTransform]);
@@ -1434,6 +1468,7 @@ const App: React.FC = () => {
       setActiveOverlayId(null);
       setMaskDataUrl(null);
       setRotation(0);
+      setPreviewFilter('');
       resetViewTransform();
     }
   }, [canRedo, historyIndex, resetViewTransform]);
@@ -1451,6 +1486,7 @@ const App: React.FC = () => {
       setActiveOverlayId(null);
       setMaskDataUrl(null);
       setRotation(0);
+      setPreviewFilter('');
       resetViewTransform();
     }
   }, [history, resetViewTransform]);
@@ -1469,6 +1505,7 @@ const App: React.FC = () => {
             setCompletedCrop(undefined);
             setMaskDataUrl(null);
             setRotation(0);
+            setPreviewFilter('');
             resetViewTransform();
         }
     }, [history.length, resetViewTransform]);
@@ -1489,6 +1526,7 @@ const App: React.FC = () => {
       setActiveOverlayId(null);
       setMaskDataUrl(null);
       setRotation(0);
+      setPreviewFilter('');
       resetViewTransform();
   }, [resetViewTransform]);
 
@@ -1685,6 +1723,7 @@ const App: React.FC = () => {
         // instead of relying on state (which might be stale in this callback scope)
         setIsLoading(true);
         setError(null);
+        setPreviewFilter('');
         try {
             let maskFile: File | undefined = undefined;
             if (imgRef.current) {
@@ -1962,6 +2001,7 @@ const App: React.FC = () => {
                     src={currentImageUrl}
                     alt="Current"
                     className="absolute inset-0 w-full h-full object-contain pointer-events-none"
+                    style={{ filter: previewFilter }}
                 />
                 {/* Clipped Original Image */}
                 <div 
@@ -2012,6 +2052,7 @@ const App: React.FC = () => {
                     alt="Current"
                     onLoad={onImageLoad}
                     className={`absolute inset-0 w-full h-full object-contain transition-opacity duration-200 ease-in-out animate-image-update ${isComparing ? 'opacity-0' : 'opacity-100'}`}
+                    style={{ filter: previewFilter }}
                     loading="lazy"
                 />
                 {/* Mask Overlay */}
@@ -2291,6 +2332,7 @@ const App: React.FC = () => {
                     isAreaSelected={!!editHotspot || !!maskDataUrl}
                     onApplyStyleFromUrl={handleApplyStyleFromUrl}
                     onBatchApply={(prompt, name) => handleOpenBatchPresetModal(prompt, name, 'adjustment')}
+                    onPreviewChange={setPreviewFilter}
                 />
                 </div>
                 

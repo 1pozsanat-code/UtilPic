@@ -31,6 +31,9 @@ const MaskEditor: React.FC<MaskEditorProps> = ({ isOpen, onClose, onApplyMask, b
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  
+  // Offscreen canvas to store the pure mask data (alpha channel)
+  const maskCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // Tool State
   const [activeTool, setActiveTool] = useState<Tool>('brush');
@@ -62,12 +65,14 @@ const MaskEditor: React.FC<MaskEditorProps> = ({ isOpen, onClose, onApplyMask, b
   }, [adjustments]);
 
   // Reset Logic
-  const resetCanvas = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (canvas) {
-        const ctx = canvas.getContext('2d');
-        ctx?.clearRect(0, 0, canvas.width, canvas.height);
+  const resetMask = useCallback(() => {
+    // Clear mask canvas
+    if (maskCanvasRef.current) {
+        const ctx = maskCanvasRef.current.getContext('2d');
+        ctx?.clearRect(0, 0, maskCanvasRef.current.width, maskCanvasRef.current.height);
     }
+    // Redraw main canvas
+    drawMainCanvas();
   }, []);
 
   const resizeCanvas = useCallback(() => {
@@ -90,28 +95,39 @@ const MaskEditor: React.FC<MaskEditorProps> = ({ isOpen, onClose, onApplyMask, b
             canvasWidth = height * imageAspectRatio;
         }
 
-        // Save current canvas content before resizing to restore it? 
-        // For simplicity in this demo, we might lose it or rely on a separate buffer if needed.
-        // But React lifecycle might trigger this on init mainly.
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = canvas.width;
-        tempCanvas.height = canvas.height;
-        const tempCtx = tempCanvas.getContext('2d');
-        tempCtx?.drawImage(canvas, 0, 0);
-
         canvas.width = canvasWidth;
         canvas.height = canvasHeight;
         
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-            ctx.drawImage(tempCanvas, 0, 0, canvasWidth, canvasHeight);
+        // Initialize or Resize Mask Canvas
+        if (!maskCanvasRef.current) {
+            maskCanvasRef.current = document.createElement('canvas');
         }
+        // If dimensions changed, we might lose mask data. Ideally we'd scale it.
+        // For simplicity, we keep it consistent or clear it. 
+        // Let's try to preserve by drawing old to new if needed, but basic implementation first.
+        const prevMaskCtx = maskCanvasRef.current.getContext('2d');
+        const tempMask = document.createElement('canvas');
+        if (maskCanvasRef.current.width > 0) {
+            tempMask.width = maskCanvasRef.current.width;
+            tempMask.height = maskCanvasRef.current.height;
+            tempMask.getContext('2d')?.drawImage(maskCanvasRef.current, 0, 0);
+        }
+        
+        maskCanvasRef.current.width = canvasWidth;
+        maskCanvasRef.current.height = canvasHeight;
+        
+        if (tempMask.width > 0) {
+             prevMaskCtx?.drawImage(tempMask, 0, 0, canvasWidth, canvasHeight);
+        }
+
+        drawMainCanvas();
     }
   }, []);
 
   useEffect(() => {
     if (isOpen) {
         window.addEventListener('resize', resizeCanvas);
+        // Delay slightly to ensure container is rendered
         setTimeout(resizeCanvas, 100);
     } else {
         window.removeEventListener('resize', resizeCanvas);
@@ -119,6 +135,11 @@ const MaskEditor: React.FC<MaskEditorProps> = ({ isOpen, onClose, onApplyMask, b
     return () => window.removeEventListener('resize', resizeCanvas);
   }, [isOpen, resizeCanvas]);
   
+  // Re-draw whenever adjustments change
+  useEffect(() => {
+    drawMainCanvas();
+  }, [adjustments]);
+
   const getCanvasCoords = (e: React.PointerEvent<HTMLCanvasElement>): { x: number, y: number } | null => {
       const canvas = canvasRef.current;
       if (!canvas) return null;
@@ -126,38 +147,161 @@ const MaskEditor: React.FC<MaskEditorProps> = ({ isOpen, onClose, onApplyMask, b
       return { x: e.clientX - rect.left, y: e.clientY - rect.top };
   };
 
-  // --- DRAWING LOGIC ---
+
+  // --- COMPOSITING & DRAWING ---
+  
+  // This function is responsible for rendering the final view:
+  // 1. If no adjustments: Show Red Overlay on top of Base Image.
+  // 2. If adjustments: Show Base Image + (Base Image * Filters * MaskAlpha).
+  const drawMainCanvas = () => {
+      const canvas = canvasRef.current;
+      const maskCanvas = maskCanvasRef.current;
+      const image = imageRef.current;
+      if (!canvas || !maskCanvas || !image) return;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      // 1. Clear Screen
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // 2. Draw pure original image? No, wait. 
+      // We want to verify if adjustments are active.
+      const hasAdjustments = Object.values(adjustments).some(v => v !== 0);
+
+      if (hasAdjustments) {
+          // --- PREVIEW MODE ---
+          // Draw Original
+          // Draw Filtered Version masked by MaskCanvas
+          
+          // Layer 1: Original
+          // (Can't draw image element directly if aspect ratio differs, use resize logic or background div?)
+          // Since the canvas matches the displayed image area perfectly:
+          // We can't draw the HTMLImageElement easily if it's styled "object-contain".
+          // But our resizeCanvas logic sets canvas size exactly to the image display size.
+          // So we can draw the image scaled to canvas size.
+          ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+          
+          // Layer 2: Adjusted
+          ctx.save();
+          // Construct filter string
+          // Mapping:
+          // Exposure -> Brightness (50% to 150%)
+          // Contrast -> Contrast (50% to 150%)
+          // Highlights/Shadows/Whites/Blacks -> Approximation via brightness/contrast curves is hard in CSS filters.
+          // We will map Highlights/Whites to Brightness and Shadows/Blacks to Contrast/Brightness combo for preview.
+          const brightnessVal = 100 + adjustments.exposure + (adjustments.highlights / 2) + (adjustments.whites / 2);
+          const contrastVal = 100 + adjustments.contrast + (adjustments.shadows / 4) + (adjustments.blacks / 4); // Crude approximation
+          const saturateVal = 100 + (adjustments.structure / 2); // Structure often correlates with local contrast/sat perception slightly, or just ignore.
+          
+          let filterString = `brightness(${brightnessVal}%) contrast(${contrastVal}%) saturate(${saturateVal}%)`;
+          if (adjustments.temperature !== 0) {
+             filterString += adjustments.temperature > 0 ? ` sepia(${adjustments.temperature * 0.3}%)` : ` hue-rotate(${adjustments.temperature/2}deg)`;
+          }
+
+          ctx.filter = filterString;
+          ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+          ctx.restore();
+
+          // Layer 3: Apply Mask (Keep only the adjusted parts where mask exists)
+          // We use 'destination-in' to keep the adjusted image ONLY where the mask is opaque.
+          // BUT, we already drew the original on Step 1.
+          // So Step 2 drew over it. Now we need to CUT Step 2 to the mask shape.
+          // Wait, 'destination-in' will cut the *entire canvas* content.
+          // Correct approach:
+          // 1. Draw Original.
+          // 2. Save state.
+          // 3. Create Offscreen canvas for Adjusted Image.
+          // 4. Draw Adjusted Image on Offscreen.
+          // 5. Draw Mask on Offscreen (composite destination-in).
+          // 6. Draw Offscreen on Main Canvas.
+          
+          const tempCanvas = document.createElement('canvas');
+          tempCanvas.width = canvas.width;
+          tempCanvas.height = canvas.height;
+          const tempCtx = tempCanvas.getContext('2d');
+          if (tempCtx) {
+              // Draw filtered image
+              tempCtx.filter = filterString;
+              tempCtx.drawImage(image, 0, 0, canvas.width, canvas.height);
+              tempCtx.filter = 'none';
+
+              // Composite Mask
+              tempCtx.globalCompositeOperation = 'destination-in';
+              tempCtx.drawImage(maskCanvas, 0, 0);
+              
+              // Draw back to main
+              ctx.drawImage(tempCanvas, 0, 0);
+          }
+
+      } else {
+          // --- SELECTION MODE ---
+          // Just draw the red overlay.
+          // We assume the background image is visible via the <img> tag behind the canvas.
+          // The canvas only needs to show the Red Mask.
+          // Wait, if we clear the canvas, we see the image behind.
+          // So we just draw the maskCanvas in Red.
+          
+          // 1. Clear
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          
+          // 2. Draw Mask as Red
+          // Create a temp canvas filled with Red
+          const tempCanvas = document.createElement('canvas');
+          tempCanvas.width = canvas.width;
+          tempCanvas.height = canvas.height;
+          const tCtx = tempCanvas.getContext('2d');
+          if (tCtx) {
+              tCtx.fillStyle = `rgba(239, 68, 68, ${MASK_BASE_ALPHA})`; // Red with alpha
+              tCtx.fillRect(0, 0, canvas.width, canvas.height);
+              
+              // Cut to mask shape
+              tCtx.globalCompositeOperation = 'destination-in';
+              tCtx.drawImage(maskCanvas, 0, 0);
+              
+              // Draw to main
+              ctx.drawImage(tempCanvas, 0, 0);
+          }
+      }
+  };
+
+  // --- DRAWING OPERATIONS ON MASK CANVAS ---
 
   const drawBrush = (x: number, y: number) => {
-    const ctx = canvasRef.current?.getContext('2d');
+    const ctx = maskCanvasRef.current?.getContext('2d');
     if (!ctx) return;
 
     const radius = brushSize / 2;
-    const dynamicAlpha = MASK_BASE_ALPHA;
     
-    // We only support brush (add) and eraser (remove) in this simple pixel mode
-    const color = `rgba(239, 68, 68, ${dynamicAlpha})`;
+    // For the mask logic: White = Selected (Opaque), Transparent = Unselected.
+    // The "Red" visual is handled in drawMainCanvas.
+    // So here we draw pure white (or eraser clears it).
     
     ctx.globalCompositeOperation = activeTool === 'eraser' ? 'destination-out' : 'source-over';
 
+    // Handle Softness
     if (brushHardness < 100) {
         const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
-        gradient.addColorStop(0, color);
-        gradient.addColorStop(brushHardness / 100, color);
-        gradient.addColorStop(1, 'rgba(239, 68, 68, 0)');
+        gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+        gradient.addColorStop(brushHardness / 100, 'rgba(255, 255, 255, 1)');
+        gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
         ctx.fillStyle = gradient;
     } else {
-        ctx.fillStyle = color;
+        ctx.fillStyle = 'rgba(255, 255, 255, 1)';
     }
 
     ctx.beginPath();
     ctx.arc(x, y, radius, 0, Math.PI * 2);
     ctx.fill();
+    
+    // Update visual
+    drawMainCanvas();
   };
 
   const drawGradient = (ctx: CanvasRenderingContext2D, start: {x:number, y:number}, end: {x:number, y:number}, type: 'linear' | 'radial') => {
-      const color = `rgba(239, 68, 68, ${MASK_BASE_ALPHA})`;
-      const transparent = `rgba(239, 68, 68, 0)`;
+      // White gradient
+      const color = `rgba(255, 255, 255, 1)`;
+      const transparent = `rgba(255, 255, 255, 0)`;
 
       let gradient;
       if (type === 'linear') {
@@ -209,40 +353,34 @@ const MaskEditor: React.FC<MaskEditorProps> = ({ isOpen, onClose, onApplyMask, b
     if (activeTool === 'brush' || activeTool === 'eraser') {
         drawBrush(coords.x, coords.y);
     } 
-    // For gradients, we render on a loop or on frame, but here we'll let a separate overlay handle the preview or implement a temporary draw cycle?
-    // Simplified: We will just re-render the whole canvas if it were layer-based, but since it's destructive, 
-    // we need to save the state on Down, and restore+draw on Move.
-    // For MVP Complexity: We will only draw gradient on UP. (Or implement a temp overlay layer).
-    // Let's implement a temp overlay approach for gradients in a future iteration. 
-    // For now, let's just draw on 'Up' or use a 'preview' layer logic if possible.
-    // Actually, let's do the "Restore Image Data" trick for smooth UX.
   };
   
-  // To handle live gradient preview, we need to save canvas state on PointerDown
-  const [snapshot, setSnapshot] = useState<ImageData | null>(null);
+  // Store snapshot of mask for gradient preview
+  const [maskSnapshot, setMaskSnapshot] = useState<ImageData | null>(null);
 
   useEffect(() => {
       if (isDrawing && startPos && (activeTool === 'linear-gradient' || activeTool === 'radial-gradient')) {
-          const ctx = canvasRef.current?.getContext('2d');
-          if (ctx && !snapshot) {
-              setSnapshot(ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height));
+          const ctx = maskCanvasRef.current?.getContext('2d');
+          if (ctx && !maskSnapshot) {
+              setMaskSnapshot(ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height));
           }
       } else if (!isDrawing) {
-          setSnapshot(null);
+          setMaskSnapshot(null);
       }
-  }, [isDrawing, startPos, activeTool, snapshot]);
+  }, [isDrawing, startPos, activeTool, maskSnapshot]);
 
   useEffect(() => {
-      // Render loop for gradient preview
-      if (isDrawing && snapshot && startPos && currentPos && (activeTool === 'linear-gradient' || activeTool === 'radial-gradient')) {
-          const ctx = canvasRef.current?.getContext('2d');
+      // Render loop for gradient preview on MASK canvas
+      if (isDrawing && maskSnapshot && startPos && currentPos && (activeTool === 'linear-gradient' || activeTool === 'radial-gradient')) {
+          const ctx = maskCanvasRef.current?.getContext('2d');
           if (ctx) {
-              ctx.putImageData(snapshot, 0, 0);
-              ctx.globalCompositeOperation = 'source-over'; // Gradients always add
+              ctx.putImageData(maskSnapshot, 0, 0);
+              ctx.globalCompositeOperation = 'source-over'; 
               drawGradient(ctx, startPos, currentPos, activeTool === 'linear-gradient' ? 'linear' : 'radial');
+              drawMainCanvas(); // Update view
           }
       }
-  }, [currentPos, isDrawing, snapshot, startPos, activeTool]);
+  }, [currentPos, isDrawing, maskSnapshot, startPos, activeTool]);
 
 
   const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -256,8 +394,8 @@ const MaskEditor: React.FC<MaskEditorProps> = ({ isOpen, onClose, onApplyMask, b
 
   const handleAISelect = async (type: 'sky' | 'subject') => {
       const image = imageRef.current;
-      const canvas = canvasRef.current;
-      if (!image || !canvas || !baseImageSrc) return;
+      const maskCanvas = maskCanvasRef.current;
+      if (!image || !maskCanvas || !baseImageSrc) return;
 
       setIsGeneratingMask(true);
       try {
@@ -269,45 +407,19 @@ const MaskEditor: React.FC<MaskEditorProps> = ({ isOpen, onClose, onApplyMask, b
           // Call API
           const maskDataUrl = await generateSegmentationMask(file, type);
 
-          // Draw result onto canvas
+          // Draw result onto MASK canvas
           const maskImg = new Image();
           maskImg.onload = () => {
-             const ctx = canvas.getContext('2d');
+             const ctx = maskCanvas.getContext('2d');
              if (ctx) {
-                 // We need to draw this mask (which is B&W) as Red transparent on our canvas
-                 // 1. Draw B&W to a temp canvas
-                 const tempCanvas = document.createElement('canvas');
-                 tempCanvas.width = canvas.width;
-                 tempCanvas.height = canvas.height;
-                 const tCtx = tempCanvas.getContext('2d');
-                 tCtx?.drawImage(maskImg, 0, 0, canvas.width, canvas.height);
+                 // The AI returns B&W mask. We just draw it onto our mask canvas.
+                 // Lighter pixels = Selected.
+                 // We might need to ensure it's treated as an alpha map.
+                 // Simple approach: Draw it. The visualizer handles the red.
+                 ctx.globalCompositeOperation = 'source-over'; // Add to current selection or replace? usually add.
+                 ctx.drawImage(maskImg, 0, 0, maskCanvas.width, maskCanvas.height);
                  
-                 // 2. Iterate pixels and convert White to Red-Transparent
-                 const imgData = tCtx?.getImageData(0, 0, canvas.width, canvas.height);
-                 if (imgData) {
-                     const data = imgData.data;
-                     for(let i=0; i<data.length; i+=4) {
-                         const brightness = (data[i] + data[i+1] + data[i+2]) / 3;
-                         if (brightness > 128) { // It's white-ish (selected)
-                             data[i] = 239; // R
-                             data[i+1] = 68; // G
-                             data[i+2] = 68; // B
-                             data[i+3] = Math.floor(255 * MASK_BASE_ALPHA); // Alpha
-                         } else {
-                             data[i+3] = 0; // Transparent
-                         }
-                     }
-                     
-                     // 3. Put onto main canvas (Adding to selection)
-                     const newCanvas = document.createElement('canvas');
-                     newCanvas.width = canvas.width;
-                     newCanvas.height = canvas.height;
-                     const nCtx = newCanvas.getContext('2d');
-                     nCtx?.putImageData(imgData, 0, 0);
-                     
-                     ctx.globalCompositeOperation = 'source-over';
-                     ctx.drawImage(newCanvas, 0, 0);
-                 }
+                 drawMainCanvas();
              }
              setIsGeneratingMask(false);
           };
@@ -316,7 +428,6 @@ const MaskEditor: React.FC<MaskEditorProps> = ({ isOpen, onClose, onApplyMask, b
       } catch (err) {
           console.error("AI Selection failed", err);
           setIsGeneratingMask(false);
-          // Optional: Show error
       }
   };
 
@@ -340,8 +451,8 @@ const MaskEditor: React.FC<MaskEditorProps> = ({ isOpen, onClose, onApplyMask, b
   };
 
   const handleApply = () => {
-    const canvas = canvasRef.current;
-    if (canvas) {
+    const maskCanvas = maskCanvasRef.current;
+    if (maskCanvas) {
         const scaledCanvas = document.createElement('canvas');
         const image = imageRef.current;
         if (!image) return;
@@ -352,7 +463,12 @@ const MaskEditor: React.FC<MaskEditorProps> = ({ isOpen, onClose, onApplyMask, b
         if (!ctx) return;
 
         // Draw the mask from the display canvas onto the full-res canvas
-        ctx.drawImage(canvas, 0, 0, image.naturalWidth, image.naturalHeight);
+        // This scales the red/alpha mask up to full res
+        ctx.drawImage(maskCanvas, 0, 0, image.naturalWidth, image.naturalHeight);
+        
+        // If we are applying adjustments, we generate a prompt.
+        // If no adjustments, we just return mask for other uses?
+        // The prompt assumes we are doing adjustments.
         
         const autoPrompt = generatePromptFromValues();
         onApplyMask(scaledCanvas.toDataURL(), autoPrompt);
@@ -402,12 +518,18 @@ const MaskEditor: React.FC<MaskEditorProps> = ({ isOpen, onClose, onApplyMask, b
 
             {/* MIDDLE CANVAS AREA */}
             <div ref={containerRef} className="flex-grow relative bg-black/40 flex items-center justify-center overflow-hidden">
+                {/* Background Image: Only shown if no adjustments active, otherwise Canvas draws it. */}
+                {/* Actually, if we use object-contain on image and canvas, they align. 
+                    But Canvas drawing image manually might miss sub-pixel antialiasing or differ in scaling slightly.
+                    However, for preview it's fine. 
+                    Let's hide the background <img> when we are drawing full preview on canvas. 
+                */}
                 {baseImageSrc && (
                     <img
                         ref={imageRef}
                         src={baseImageSrc}
                         alt="Masking background"
-                        className="max-w-full max-h-full object-contain pointer-events-none select-none"
+                        className={`max-w-full max-h-full object-contain pointer-events-none select-none ${isAdjustmentActive ? 'opacity-0' : 'opacity-100'}`}
                         onLoad={resizeCanvas}
                     />
                 )}
@@ -507,7 +629,7 @@ const MaskEditor: React.FC<MaskEditorProps> = ({ isOpen, onClose, onApplyMask, b
                 </div>
 
                 <div className="space-y-3 pt-2">
-                    <button onClick={resetCanvas} className="w-full bg-gray-800 text-gray-300 font-semibold py-3 px-4 rounded-lg transition-all hover:bg-gray-700 active:scale-95 text-sm">
+                    <button onClick={resetMask} className="w-full bg-gray-800 text-gray-300 font-semibold py-3 px-4 rounded-lg transition-all hover:bg-gray-700 active:scale-95 text-sm">
                         Clear Mask
                     </button>
                     <button onClick={handleApply} className="w-full bg-gradient-to-br from-blue-600 to-blue-500 text-white font-bold py-3 px-4 rounded-lg transition-all shadow-lg hover:shadow-blue-500/30 active:scale-95 text-sm">
