@@ -1590,36 +1590,44 @@ const App: React.FC = () => {
   };
 
   const getCoordsFromEvent = useCallback((e: React.PointerEvent) => {
-    const container = imageContainerRef.current;
     const img = imgRef.current;
-    if (!container || !img) return null;
+    if (!img) return null;
 
-    const containerRect = container.getBoundingClientRect();
-    const clickX = e.clientX - containerRect.left;
-    const clickY = e.clientY - containerRect.top;
-
-    // Undo the view transform to find the click position on the untransformed, fitted image element
-    const pointOnImageElementX = (clickX - viewTransform.pan.x) / viewTransform.scale;
-    const pointOnImageElementY = (clickY - viewTransform.pan.y) / viewTransform.scale;
-
-    // Convert from image element coordinates to natural image coordinates
-    const { naturalWidth, naturalHeight, clientWidth, clientHeight } = img;
-    const scaleToNaturalX = naturalWidth / clientWidth;
-    const scaleToNaturalY = naturalHeight / clientHeight;
-
-    const originalX = Math.round(pointOnImageElementX * scaleToNaturalX);
-    const originalY = Math.round(pointOnImageElementY * scaleToNaturalY);
+    const rect = img.getBoundingClientRect();
     
-    // Check if click is within the image bounds on the element
-    if (pointOnImageElementX < 0 || pointOnImageElementX > clientWidth || pointOnImageElementY < 0 || pointOnImageElementY > clientHeight) {
+    // Check if click is strictly inside the visible image
+    if (
+        e.clientX < rect.left || 
+        e.clientX > rect.right || 
+        e.clientY < rect.top || 
+        e.clientY > rect.bottom
+    ) {
         return null;
     }
 
+    // Normalized coordinates (0 to 1) based on the visual bounding box
+    const normX = (e.clientX - rect.left) / rect.width;
+    const normY = (e.clientY - rect.top) / rect.height;
+
+    // Natural coordinates (for API usage)
+    const originalX = Math.round(normX * img.naturalWidth);
+    const originalY = Math.round(normY * img.naturalHeight);
+
+    // Display coordinates (for marker placement)
+    // The red marker is placed inside the transformed container relative to the image's layout position.
+    // We calculate the position relative to the image element's offset within that container.
+    // Note: This assumes the marker is absolute positioned inside the same container as the img.
+    // `img.offsetLeft` gives the x-offset of the image from the container's left edge (handling centering).
+    // `img.offsetWidth` gives the width of the rendered image element (handling scaling/containment).
+    
     return {
-        display: { x: clickX, y: clickY },
+        display: { 
+            x: img.offsetLeft + normX * img.offsetWidth, 
+            y: img.offsetTop + normY * img.offsetHeight 
+        },
         edit: { x: originalX, y: originalY },
     };
-}, [viewTransform]);
+}, []);
 
   const handleImageClick = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!isZoomPanEnabled) return;
